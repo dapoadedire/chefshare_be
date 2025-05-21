@@ -1,0 +1,18 @@
+services:
+  db:
+    container_name: "chefshare_be"
+    image: postgres:14
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+
+    restart: always
+
+volumes:
+  pg_data:
+    driver: local
