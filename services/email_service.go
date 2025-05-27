@@ -29,6 +29,8 @@ func NewEmailService() (*EmailService, error) {
 func (s *EmailService) SendWelcomeEmail(email string, name string) (string, error) {
 	ctx := context.Background()
 	currentYear := time.Now().Year()
+	from := os.Getenv("EMAIL_FROM")
+	replyTo := os.Getenv("EMAIL_REPLY_TO")
 
 	htmlContent := fmt.Sprintf(`
 <!DOCTYPE html>
@@ -114,12 +116,12 @@ func (s *EmailService) SendWelcomeEmail(email string, name string) (string, erro
 `, name, currentYear)
 
 	params := &resend.SendEmailRequest{
-		From: "Chefshare <hello@dapoadedire.xyz>",
-		To:      []string{email},
-		Subject: "Welcome to Chefshare!",
-		Html:    htmlContent,
-		ReplyTo: "adedireadedapo19@gmail.com",
-		 ScheduledAt: "in 1 hour",
+		From:       fmt.Sprintf("Chefshare <%s>", from),
+		To:          []string{email},
+		Subject:     "Welcome to Chefshare!",
+		Html:        htmlContent,
+		ReplyTo:     fmt.Sprintf("Chefshare <%s>", replyTo),
+		// ScheduledAt: "in 1 hour",
 	}
 
 	sent, err := s.client.Emails.SendWithContext(ctx, params)
