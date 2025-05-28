@@ -23,7 +23,6 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-
 type registeredUserRequest struct {
 	Username       string `json:"username"`
 	Email          string `json:"email"`
@@ -35,16 +34,18 @@ type registeredUserRequest struct {
 }
 
 type AuthHandler struct {
-	UserStore    store.UserStore
-	SessionStore store.SessionStore
-	EmailService *services.EmailService
+	UserStore          store.UserStore
+	SessionStore       store.SessionStore
+	PasswordResetStore store.PasswordResetStore
+	EmailService       *services.EmailService
 }
 
-func NewAuthHandler(userStore store.UserStore, sessionStore store.SessionStore, emailService *services.EmailService) *AuthHandler {
+func NewAuthHandler(userStore store.UserStore, sessionStore store.SessionStore, passwordResetStore store.PasswordResetStore, emailService *services.EmailService) *AuthHandler {
 	return &AuthHandler{
-		UserStore:    userStore,
-		SessionStore: sessionStore,
-		EmailService: emailService,
+		UserStore:          userStore,
+		SessionStore:       sessionStore,
+		PasswordResetStore: passwordResetStore,
+		EmailService:       emailService,
 	}
 }
 

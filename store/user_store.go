@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -132,6 +133,30 @@ type UserStore interface {
 	CreateUser(user *User) error
 	GetUserByEmail(email string) (*User, error)
 	GetUserByID(id int64) (*User, error)
+	UpdatePassword(userID int64, newPassword string) error
+}
+
+// UpdatePassword updates a user's password
+func (s *PostgresUserStore) UpdatePassword(userID int64, newPassword string) error {
+	// Create a temporary password struct to generate the hash
+	var pass password
+	if err := pass.SetPassword(newPassword); err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update the password in the database
+	query := `
+		UPDATE users 
+		SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`
+
+	_, err := s.db.Exec(query, pass.hash, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
 }
 
 func NewPostgresUserStore(db *sql.DB) *PostgresUserStore {

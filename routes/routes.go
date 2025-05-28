@@ -12,6 +12,9 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 	// Setup session cleanup middleware (run every 6 hours)
 	router.Use(middleware.SessionCleanupMiddleware(app.SessionStore, 6*time.Hour))
 
+	// Setup password reset token cleanup middleware (run every hour)
+	router.Use(middleware.PasswordResetCleanupMiddleware(app.PasswordResetStore, 1*time.Hour))
+
 	// API version group
 	v1 := router.Group("/api/v1")
 	{
@@ -21,6 +24,11 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 			auth.POST("/signup", app.AuthHandler.SignUp)
 			auth.POST("/login", app.AuthHandler.Login)
 			auth.POST("/logout", app.AuthHandler.Logout)
+
+			// Password reset flow
+			auth.POST("/forgot-password", app.AuthHandler.RequestPasswordReset)
+			auth.POST("/reset-password", app.AuthHandler.VerifyOTPAndResetPassword)
+			auth.POST("/resend-otp", app.AuthHandler.ResendOTP)
 
 			// Protected route that requires authentication
 			authRequired := auth.Group("")
