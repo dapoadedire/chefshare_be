@@ -28,10 +28,11 @@ func Open() (*sql.DB, error) {
 	dbPort := os.Getenv("DB_PORT")
 	dbUser := os.Getenv("DB_USER")
 	dbName := os.Getenv("DB_NAME")
+	sslMode := os.Getenv("DB_SSLMODE")
 
 	// Construct connection string
-	connStr := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbName, dbPassword)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbName, dbPassword, sslMode)
 	// Open a connection to the database
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
