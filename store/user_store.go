@@ -2,11 +2,12 @@ package store
 
 import (
 	"database/sql"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
 type password struct {
-	hash     []byte
+	hash      []byte
 	plainText *string
 }
 
@@ -33,6 +34,11 @@ func (password *password) SetPassword(plaintextPassword string) error {
 	password.hash = hash
 	return nil
 }
+
+func (password *password) CheckPassword(plaintextPassword string) error {
+	return bcrypt.CompareHashAndPassword(password.hash, []byte(plaintextPassword))
+}
+
 type PostgresUserStore struct {
 	db *sql.DB
 }
@@ -50,9 +56,82 @@ func (s *PostgresUserStore) CreateUser(user *User) error {
 	return nil
 }
 
+func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
+	query := `
+		SELECT id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
+		       last_login, created_at, updated_at
+		FROM users
+		WHERE email = $1
+	`
+
+	user := &User{}
+	var passwordHash []byte
+
+	err := s.db.QueryRow(query, email).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&passwordHash,
+		&user.Bio,
+		&user.FirstName,
+		&user.LastName,
+		&user.ProfilePicture,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // User not found
+		}
+		return nil, err
+	}
+
+	user.PasswordHash.hash = passwordHash
+	return user, nil
+}
+
+func (s *PostgresUserStore) GetUserByID(id int64) (*User, error) {
+	query := `
+		SELECT id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
+		       last_login, created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`
+
+	user := &User{}
+	var passwordHash []byte
+
+	err := s.db.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&passwordHash,
+		&user.Bio,
+		&user.FirstName,
+		&user.LastName,
+		&user.ProfilePicture,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // User not found
+		}
+		return nil, err
+	}
+
+	user.PasswordHash.hash = passwordHash
+	return user, nil
+}
 
 type UserStore interface {
 	CreateUser(user *User) error
+	GetUserByEmail(email string) (*User, error)
+	GetUserByID(id int64) (*User, error)
 }
 
 func NewPostgresUserStore(db *sql.DB) *PostgresUserStore {

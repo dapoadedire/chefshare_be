@@ -12,8 +12,10 @@ import (
 
 type Application struct {
 	DB           *sql.DB
-	UserHandler  *api.UserHandler
+	AuthHandler  *api.AuthHandler
 	EmailService *services.EmailService
+	SessionStore store.SessionStore
+	UserStore    store.UserStore
 }
 
 func NewApplication() (*Application, error) {
@@ -36,13 +38,16 @@ func NewApplication() (*Application, error) {
 	}
 
 	userStore := store.NewPostgresUserStore(pgDB)
+	sessionStore := store.NewPostgresSessionStore(pgDB)
 
-	userHandler := api.NewUserHandler(userStore, emailService)
+	authHandler := api.NewAuthHandler(userStore, sessionStore, emailService)
 
 	app := &Application{
 		DB:           pgDB,
-		UserHandler:  userHandler,
+		AuthHandler:  authHandler,
 		EmailService: emailService,
+		UserStore:    userStore,
+		SessionStore: sessionStore,
 	}
 
 	return app, nil
