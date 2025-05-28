@@ -134,6 +134,7 @@ type UserStore interface {
 	GetUserByEmail(email string) (*User, error)
 	GetUserByID(id int64) (*User, error)
 	UpdatePassword(userID int64, newPassword string) error
+	UpdateUser(userID int64, updates map[string]interface{}) error
 }
 
 // UpdatePassword updates a user's password
@@ -157,6 +158,45 @@ func (s *PostgresUserStore) UpdatePassword(userID int64, newPassword string) err
 	}
 
 	return nil
+}
+
+// UpdateUser updates user profile information
+func (s *PostgresUserStore) UpdateUser(userID int64, updates map[string]interface{}) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	// Build the dynamic query
+	query := "UPDATE users SET "
+	params := make([]interface{}, 0, len(updates))
+	i := 1
+
+	for field, value := range updates {
+		if i > 1 {
+			query += ", "
+		}
+		query += field + " = $" + fmt.Sprint(i)
+		params = append(params, value)
+		i++
+	}
+
+	// Add WHERE clause
+	query += " WHERE id = $" + fmt.Sprint(i)
+	params = append(params, userID)
+
+	// Execute the query
+	_, err := s.db.Exec(query, params...)
+	if err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return nil
+}
+
+// DB returns the underlying database connection
+// This is needed for more complex queries that aren't part of the standard interface
+func (s *PostgresUserStore) DB() *sql.DB {
+	return s.db
 }
 
 func NewPostgresUserStore(db *sql.DB) *PostgresUserStore {

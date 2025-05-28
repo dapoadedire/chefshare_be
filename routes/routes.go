@@ -42,8 +42,11 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 		protected := v1.Group("")
 		protected.Use(middleware.AuthMiddleware(app.SessionStore))
 		{
-			// Add your protected routes here
-			// Example: protected.GET("/profile", app.UserHandler.GetProfile)
+			// User routes
+			users := protected.Group("/users")
+			{
+				users.PUT("/update", app.UserHandler.UpdateUser)
+			}
 		}
 
 		// Health check endpoint
