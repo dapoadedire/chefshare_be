@@ -49,7 +49,18 @@ func NewAuthHandler(userStore store.UserStore, sessionStore store.SessionStore, 
 	}
 }
 
-// SignUp creates a new user and establishes a session
+// SignUp godoc
+// @Summary Register a new user
+// @Description Register a new user with the provided information
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param user body registeredUserRequest true "User Registration Info"
+// @Success 201 {object} map[string]interface{} "User created successfully"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 409 {object} map[string]string "Username or email already exists"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/signup [post]
 func (h *AuthHandler) SignUp(c *gin.Context) {
 	var req registeredUserRequest
 	err := c.ShouldBindJSON(&req)
@@ -174,7 +185,18 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 	})
 }
 
-// Login validates credentials and establishes a session
+// Login godoc
+// @Summary User login
+// @Description Authenticates a user and returns a session token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param credentials body loginRequest true "User login credentials"
+// @Success 200 {object} map[string]interface{} "Login successful with user info"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {object} map[string]string "Invalid credentials"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req loginRequest
 	err := c.ShouldBindJSON(&req)
@@ -233,7 +255,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// Logout terminates the current session
+// Logout godoc
+// @Summary Logout user
+// @Description Ends the current user session
+// @Tags Authentication
+// @Produce json
+// @Success 200 {object} map[string]string "Logout successful"
+// @Failure 401 {object} map[string]string "Unauthorized or no session found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/logout [post]
+// @Security BearerAuth
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get token from cookie
 	token, err := c.Cookie("auth_token")
@@ -256,7 +287,16 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
-// GetCurrentUser returns the current authenticated user
+// GetCurrentUser godoc
+// @Summary Get current authenticated user
+// @Description Returns the profile of the currently authenticated user
+// @Tags Authentication
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "User information"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/me [get]
 func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)
 	userID, exists := c.Get("user_id")

@@ -29,6 +29,18 @@ type resendOTPRequest struct {
 	Email string `json:"email"`
 }
 
+// RequestPasswordReset godoc
+// @Summary Request password reset
+// @Description Initiates the password reset process by sending an OTP to the user's email
+// @Tags Password Reset
+// @Accept json
+// @Produce json
+// @Param request body requestOTPRequest true "Email for reset"
+// @Success 200 {object} map[string]string "OTP sent to email"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 404 {object} map[string]string "User not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/forgot-password [post]
 // RequestPasswordReset initiates the password reset process by sending an OTP
 func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	var req requestOTPRequest
@@ -95,6 +107,19 @@ func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	})
 }
 
+// VerifyOTPAndResetPassword godoc
+// @Summary Verify OTP and reset password
+// @Description Verifies the OTP sent to user's email and resets the password
+// @Tags Password Reset
+// @Accept json
+// @Produce json
+// @Param request body verifyOTPRequest true "OTP verification and new password"
+// @Success 200 {object} map[string]string "Password reset successful"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {object} map[string]string "Invalid OTP"
+// @Failure 404 {object} map[string]string "User not found or OTP expired"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/reset-password [post]
 // VerifyOTPAndResetPassword verifies the OTP and sets a new password
 func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 	var req verifyOTPRequest
@@ -192,6 +217,18 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "password reset successful"})
 }
 
+// ResendOTP godoc
+// @Summary Resend OTP
+// @Description Resends the OTP to the user's email for password reset
+// @Tags Password Reset
+// @Accept json
+// @Produce json
+// @Param request body resendOTPRequest true "Email for OTP resend"
+// @Success 200 {object} map[string]string "OTP resent successfully"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 404 {object} map[string]string "User not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/resend-otp [post]
 // ResendOTP resends the OTP to the user's email
 func (h *AuthHandler) ResendOTP(c *gin.Context) {
 	var req resendOTPRequest

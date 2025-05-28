@@ -38,7 +38,20 @@ type UpdatePasswordRequest struct {
 	Password        string `json:"password" binding:"required"`
 }
 
-// UpdateUser handles updating a user's profile information
+// UpdateUser godoc
+// @Summary Update user profile
+// @Description Update the authenticated user's profile information
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body UpdateUserRequest true "User information to update"
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "User updated successfully"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 409 {object} map[string]string "Username or email already exists"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /users/update [put]
 // Requires authentication and password verification
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)
@@ -197,7 +210,19 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	})
 }
 
-// UpdatePassword handles updating a user's password
+// UpdatePassword godoc
+// @Summary Update user password
+// @Description Update the authenticated user's password
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body UpdatePasswordRequest true "Current and new password"
+// @Security BearerAuth
+// @Success 200 {object} map[string]string "Password updated successfully"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {object} map[string]string "Unauthorized or incorrect current password"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /users/update_password [put]
 // Requires authentication and password verification
 func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)

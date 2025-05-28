@@ -51,6 +51,12 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 		}
 
 		// Health check endpoint
+		// @Summary Health check endpoint
+		// @Description Returns the API's health status
+		// @Tags Health
+		// @Produce json
+		// @Success 200 {object} map[string]interface{} "API is healthy"
+		// @Router /health [get]
 		v1.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"status":    "ok",

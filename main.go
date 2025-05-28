@@ -7,12 +7,24 @@ import (
 	"time"
 
 	"github.com/dapoadedire/chefshare_be/app"
+	_ "github.com/dapoadedire/chefshare_be/docs" // Import swagger docs
 	"github.com/dapoadedire/chefshare_be/routes"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// @title ChefShare API
+// @version 1.0
+// @description ChefShare API Documentation
+// @host localhost:8080
+// @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and the access token.
 func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
@@ -52,6 +64,13 @@ func main() {
 
 	// Set up routes
 	router = routes.SetupRoutes(router, application)
+
+	// Set up Swagger
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler,
+		ginSwagger.URL("/swagger/doc.json"),
+		ginSwagger.DefaultModelsExpandDepth(-1),
+		ginSwagger.DocExpansion("list"),
+		ginSwagger.DeepLinking(true)))
 
 	// Get port from environment or use default
 	port := os.Getenv("PORT")
