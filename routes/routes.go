@@ -46,6 +46,7 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 			users := protected.Group("/users")
 			{
 				users.PUT("/update", app.UserHandler.UpdateUser)
+				users.PUT("/update_password", app.UserHandler.UpdatePassword)
 			}
 		}
 

@@ -6,18 +6,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dapoadedire/chefshare_be/services"
 	"github.com/dapoadedire/chefshare_be/store"
 	"github.com/dapoadedire/chefshare_be/utils"
 	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
-	UserStore store.UserStore
+	UserStore    store.UserStore
+	EmailService *services.EmailService
 }
 
-func NewUserHandler(userStore store.UserStore) *UserHandler {
+func NewUserHandler(userStore store.UserStore, emailService *services.EmailService) *UserHandler {
 	return &UserHandler{
-		UserStore: userStore,
+		UserStore:    userStore,
+		EmailService: emailService,
 	}
 }
 
@@ -28,6 +31,11 @@ type UpdateUserRequest struct {
 	LastName        *string `json:"last_name,omitempty"`
 	Bio             *string `json:"bio,omitempty"`
 	ProfilePicture  *string `json:"profile_picture,omitempty"`
+}
+
+type UpdatePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	Password        string `json:"password" binding:"required"`
 }
 
 // UpdateUser handles updating a user's profile information
@@ -187,6 +195,86 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 			"updated_at":      updatedUser.UpdatedAt,
 		},
 	})
+}
+
+// UpdatePassword handles updating a user's password
+// Requires authentication and password verification
+func (h *UserHandler) UpdatePassword(c *gin.Context) {
+	// Get user ID from context (added by AuthMiddleware)
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	userID, ok := userIDValue.(int64)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID"})
+		return
+	}
+
+	// Parse request body
+	var req UpdatePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get current user data
+	user, err := h.UserStore.GetUserByID(userID)
+	if err != nil {
+		log.Printf("Failed to fetch user data: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	if user == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	// Verify current password
+	if err := user.PasswordHash.CheckPassword(req.CurrentPassword); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid current password"})
+		return
+	}
+
+	// Validate new password strength
+	if len(req.Password) < 8 || !utils.ContainsNumberAndSymbol(req.Password) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 8 characters with a number and symbol"})
+		return
+	}
+
+	// Check that new password is different from the current one
+	if req.CurrentPassword == req.Password {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "new password must be different from current password"})
+		return
+	}
+
+	// Update the password
+	err = h.UserStore.UpdatePassword(userID, req.Password)
+	if err != nil {
+		log.Printf("Failed to update password: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		return
+	}
+
+	// Send password changed email notification if email service is available
+	if h.EmailService != nil {
+		name := user.FirstName
+		if name == "" {
+			name = user.Username
+		}
+
+		go func() {
+			_, err := h.EmailService.SendPasswordChangedEmail(user.Email, name)
+			if err != nil {
+				log.Printf("Failed to send password changed email to %s: %v", user.Email, err)
+			}
+		}()
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
 }
 
 // Helper function to check if a username is already taken by another user

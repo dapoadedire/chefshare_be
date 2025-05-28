@@ -44,7 +44,7 @@ func NewApplication() (*Application, error) {
 	passwordResetStore := store.NewPostgresPasswordResetStore(pgDB)
 
 	authHandler := api.NewAuthHandler(userStore, sessionStore, passwordResetStore, emailService)
-	userHandler := api.NewUserHandler(userStore)
+	userHandler := api.NewUserHandler(userStore, emailService)
 
 	app := &Application{
 		DB:                 pgDB,
