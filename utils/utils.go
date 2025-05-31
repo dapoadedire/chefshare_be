@@ -48,3 +48,13 @@ func IsValidURL(s string) bool {
 	_, err := url.ParseRequestURI(s)
 	return err == nil
 }
+
+// IsNumeric checks if a string contains only numeric characters
+func IsNumeric(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}

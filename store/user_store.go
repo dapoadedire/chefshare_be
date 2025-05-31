@@ -2,11 +2,13 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
 type password struct {
-	hash     []byte
+	hash      []byte
 	plainText *string
 }
 
@@ -33,6 +35,11 @@ func (password *password) SetPassword(plaintextPassword string) error {
 	password.hash = hash
 	return nil
 }
+
+func (password *password) CheckPassword(plaintextPassword string) error {
+	return bcrypt.CompareHashAndPassword(password.hash, []byte(plaintextPassword))
+}
+
 type PostgresUserStore struct {
 	db *sql.DB
 }
@@ -50,9 +57,146 @@ func (s *PostgresUserStore) CreateUser(user *User) error {
 	return nil
 }
 
+func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
+	query := `
+		SELECT id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
+		       last_login, created_at, updated_at
+		FROM users
+		WHERE email = $1
+	`
+
+	user := &User{}
+	var passwordHash []byte
+
+	err := s.db.QueryRow(query, email).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&passwordHash,
+		&user.Bio,
+		&user.FirstName,
+		&user.LastName,
+		&user.ProfilePicture,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // User not found
+		}
+		return nil, err
+	}
+
+	user.PasswordHash.hash = passwordHash
+	return user, nil
+}
+
+func (s *PostgresUserStore) GetUserByID(id int64) (*User, error) {
+	query := `
+		SELECT id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
+		       last_login, created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`
+
+	user := &User{}
+	var passwordHash []byte
+
+	err := s.db.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&passwordHash,
+		&user.Bio,
+		&user.FirstName,
+		&user.LastName,
+		&user.ProfilePicture,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // User not found
+		}
+		return nil, err
+	}
+
+	user.PasswordHash.hash = passwordHash
+	return user, nil
+}
 
 type UserStore interface {
 	CreateUser(user *User) error
+	GetUserByEmail(email string) (*User, error)
+	GetUserByID(id int64) (*User, error)
+	UpdatePassword(userID int64, newPassword string) error
+	UpdateUser(userID int64, updates map[string]interface{}) error
+}
+
+// UpdatePassword updates a user's password
+func (s *PostgresUserStore) UpdatePassword(userID int64, newPassword string) error {
+	// Create a temporary password struct to generate the hash
+	var pass password
+	if err := pass.SetPassword(newPassword); err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update the password in the database
+	query := `
+		UPDATE users 
+		SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`
+
+	_, err := s.db.Exec(query, pass.hash, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateUser updates user profile information
+func (s *PostgresUserStore) UpdateUser(userID int64, updates map[string]interface{}) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	// Build the dynamic query
+	query := "UPDATE users SET "
+	params := make([]interface{}, 0, len(updates))
+	i := 1
+
+	for field, value := range updates {
+		if i > 1 {
+			query += ", "
+		}
+		query += field + " = $" + fmt.Sprint(i)
+		params = append(params, value)
+		i++
+	}
+
+	// Add WHERE clause
+	query += " WHERE id = $" + fmt.Sprint(i)
+	params = append(params, userID)
+
+	// Execute the query
+	_, err := s.db.Exec(query, params...)
+	if err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return nil
+}
+
+// DB returns the underlying database connection
+// This is needed for more complex queries that aren't part of the standard interface
+func (s *PostgresUserStore) DB() *sql.DB {
+	return s.db
 }
 
 func NewPostgresUserStore(db *sql.DB) *PostgresUserStore {
