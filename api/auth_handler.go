@@ -338,15 +338,17 @@ func setCookieForSession(c *gin.Context, session *store.Session) {
 	domain := getDomainFromEnv()
 	maxAge := int(DefaultSessionDuration.Seconds())
 
-	c.SetCookie(
-		"auth_token",  // name
-		session.Token, // value
-		maxAge,        // max age in seconds
-		"/",           // path
-		domain,        // domain
-		true,          // secure (HTTPS only)
-		true,          // HTTP only (not accessible by JavaScript)
-	)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "auth_token",
+		Value:    session.Token,
+		Path:     "/",
+		Domain:   domain,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
+	})
 }
 
 // Helper to get the domain for cookies from environment variable
