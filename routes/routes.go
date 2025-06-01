@@ -15,9 +15,37 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 	// Setup password reset token cleanup middleware (run every hour)
 	router.Use(middleware.PasswordResetCleanupMiddleware(app.PasswordResetStore, 1*time.Hour))
 
+	// Welcome endpoint
+	// @Summary Welcome endpoint
+	// @Description Returns a welcome message with API version
+	// @Tags Welcome
+	// @Produce json
+	// @Success 200 {object} map[string]interface{} "Welcome message"
+	// @Router / [get]
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Welcome to ChefShare API",
+			"version": "1.0.0",
+		})
+	})
+
 	// API version group
 	v1 := router.Group("/api/v1")
 	{
+		// Health check endpoint
+		// @Summary Health check endpoint
+		// @Description Returns the API's health status
+		// @Tags Health
+		// @Produce json
+		// @Success 200 {object} map[string]interface{} "API is healthy"
+		// @Router /health [get]
+		v1.GET("/health", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"status":    "ok",
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		})
+
 		// Auth routes
 		auth := v1.Group("/auth")
 		{
@@ -49,20 +77,7 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 				users.PUT("/update_password", app.UserHandler.UpdatePassword)
 			}
 		}
-
-		// Health check endpoint
-		// @Summary Health check endpoint
-		// @Description Returns the API's health status
-		// @Tags Health
-		// @Produce json
-		// @Success 200 {object} map[string]interface{} "API is healthy"
-		// @Router /health [get]
-		v1.GET("/health", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"status":    "ok",
-				"timestamp": time.Now().Format(time.RFC3339),
-			})
-		})
 	}
+
 	return router
 }
