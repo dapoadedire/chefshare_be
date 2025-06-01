@@ -47,7 +47,7 @@ func main() {
 
 	// CORS configuration using gin-contrib/cors
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"}, // Frontend origin with fallbacks
+		AllowOrigins:     []string{"http://localhost:3000", "https://chefshare-2025.vercel.app"}, // Frontend origin with fallbacks
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Type"},
