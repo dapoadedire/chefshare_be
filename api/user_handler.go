@@ -304,7 +304,6 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
 }
 
-// Helper function to check if a username is already taken by another user
 func (h *UserHandler) checkUsernameExists(username string, excludeUserID string) (bool, error) {
 
 	query := `
