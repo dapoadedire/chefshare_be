@@ -9,6 +9,8 @@ import (
 )
 
 // JWTAuthMiddleware creates a middleware for JWT authentication
+// It extracts the bearer token from the Authorization header,
+// validates it using the JWT service, and sets user details in the context
 func JWTAuthMiddleware(jwtService *services.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Only check Authorization header

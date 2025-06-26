@@ -15,73 +15,9 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/auth/forgot-password": {
-            "post": {
-                "description": "Initiates the password reset process by sending an OTP to the user's email",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Password Reset"
-                ],
-                "summary": "Request password reset",
-                "parameters": [
-                    {
-                        "description": "Email for reset",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.requestOTPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OTP sent to email",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "User not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/auth/login": {
             "post": {
-                "description": "Authenticates a user and returns a session token",
+                "description": "Authenticates a user and returns access and refresh tokens",
                 "consumes": [
                     "application/json"
                 ],
@@ -105,7 +41,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful with user info",
+                        "description": "Login successful with user info and tokens",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -148,7 +84,10 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Ends the current user session",
+                "description": "Ends the current user session by revoking the refresh token",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -156,6 +95,22 @@ const docTemplate = `{
                     "Authentication"
                 ],
                 "summary": "Logout user",
+                "parameters": [
+                    {
+                        "description": "Refresh token to revoke",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "refresh_token": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Logout successful",
@@ -166,8 +121,17 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "Missing refresh token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "401": {
-                        "description": "Unauthorized or no session found",
+                        "description": "Unauthorized",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -231,7 +195,126 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/resend-otp": {
+        "/auth/password/reset/confirm": {
+            "post": {
+                "description": "Verifies the OTP sent to user's email and resets the password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Password Reset"
+                ],
+                "summary": "Verify OTP and reset password",
+                "parameters": [
+                    {
+                        "description": "OTP verification and new password",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.verifyOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password reset successful",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or OTP",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/password/reset/request": {
+            "post": {
+                "description": "Initiates the password reset process by sending an OTP to the user's email",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Password Reset"
+                ],
+                "summary": "Request password reset",
+                "parameters": [
+                    {
+                        "description": "Email for reset",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.requestOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OTP sent to email",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/password/reset/resend": {
             "post": {
                 "description": "Resends the OTP to the user's email for password reset",
                 "consumes": [
@@ -274,15 +357,6 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "404": {
-                        "description": "User not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
@@ -295,80 +369,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/reset-password": {
-            "post": {
-                "description": "Verifies the OTP sent to user's email and resets the password",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Password Reset"
-                ],
-                "summary": "Verify OTP and reset password",
-                "parameters": [
-                    {
-                        "description": "OTP verification and new password",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.verifyOTPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Password reset successful",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid OTP",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "User not found or OTP expired",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/auth/signup": {
+        "/auth/register": {
             "post": {
                 "description": "Register a new user with the provided information",
                 "consumes": [
@@ -430,7 +431,65 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/update": {
+        "/auth/token/refresh": {
+            "post": {
+                "description": "Validates refresh token and issues a new access token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh JWT access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "refresh_token": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "New access token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired refresh token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me": {
             "put": {
                 "security": [
                     {
@@ -485,8 +544,17 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "409": {
-                        "description": "Username or email already exists",
+                        "description": "Username already exists",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -506,7 +574,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/update_password": {
+        "/users/me/password": {
             "put": {
                 "security": [
                     {
@@ -546,7 +614,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Invalid request or password requirements not met",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -556,6 +624,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized or incorrect current password",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {

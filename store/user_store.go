@@ -13,7 +13,7 @@ type password struct {
 }
 
 type User struct {
-	UserID         string   `json:"user_id"` 
+	UserID         string   `json:"user_id"`
 	Username       string   `json:"username"`
 	Email          string   `json:"email"`
 	PasswordHash   password `json:"password_hash"`
@@ -149,7 +149,7 @@ func (s *PostgresUserStore) UpdatePassword(userID string, newPassword string) er
 	query := `
 		UPDATE users 
 		SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $2
+		WHERE user_id = $2
 	`
 
 	_, err := s.db.Exec(query, pass.hash, userID)
@@ -181,7 +181,7 @@ func (s *PostgresUserStore) UpdateUser(userID string, updates map[string]interfa
 	}
 
 	// Add WHERE clause
-	query += " WHERE id = $" + fmt.Sprint(i)
+	query += " WHERE user_id = $" + fmt.Sprint(i)
 	params = append(params, userID)
 
 	// Execute the query

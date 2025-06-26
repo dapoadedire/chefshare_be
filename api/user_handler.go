@@ -49,9 +49,10 @@ type UpdatePasswordRequest struct {
 // @Success 200 {object} map[string]interface{} "User updated successfully"
 // @Failure 400 {object} map[string]string "Invalid request"
 // @Failure 401 {object} map[string]string "Unauthorized"
-// @Failure 409 {object} map[string]string "Username or email already exists"
+// @Failure 404 {object} map[string]string "User not found"
+// @Failure 409 {object} map[string]string "Username already exists"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /users/update [put]
+// @Router /users/me [put]
 // Requires authentication and password verification
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)
@@ -219,10 +220,11 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Param request body UpdatePasswordRequest true "Current and new password"
 // @Security BearerAuth
 // @Success 200 {object} map[string]string "Password updated successfully"
-// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 400 {object} map[string]string "Invalid request or password requirements not met"
 // @Failure 401 {object} map[string]string "Unauthorized or incorrect current password"
+// @Failure 404 {object} map[string]string "User not found"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /users/update_password [put]
+// @Router /users/me/password [put]
 // Requires authentication and password verification
 func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)

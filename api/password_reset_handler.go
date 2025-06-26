@@ -38,9 +38,8 @@ type resendOTPRequest struct {
 // @Param request body requestOTPRequest true "Email for reset"
 // @Success 200 {object} map[string]string "OTP sent to email"
 // @Failure 400 {object} map[string]string "Invalid request"
-// @Failure 404 {object} map[string]string "User not found"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /auth/forgot-password [post]
+// @Router /auth/password/reset/request [post]
 // RequestPasswordReset initiates the password reset process by sending an OTP
 func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	var req requestOTPRequest
@@ -115,11 +114,10 @@ func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 // @Produce json
 // @Param request body verifyOTPRequest true "OTP verification and new password"
 // @Success 200 {object} map[string]string "Password reset successful"
-// @Failure 400 {object} map[string]string "Invalid request"
-// @Failure 401 {object} map[string]string "Invalid OTP"
-// @Failure 404 {object} map[string]string "User not found or OTP expired"
+// @Failure 400 {object} map[string]string "Invalid request or OTP"
+// @Failure 404 {object} map[string]string "User not found"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /auth/reset-password [post]
+// @Router /auth/password/reset/confirm [post]
 // VerifyOTPAndResetPassword verifies the OTP and sets a new password
 func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 	var req verifyOTPRequest
@@ -222,9 +220,8 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 // @Param request body resendOTPRequest true "Email for OTP resend"
 // @Success 200 {object} map[string]string "OTP resent successfully"
 // @Failure 400 {object} map[string]string "Invalid request"
-// @Failure 404 {object} map[string]string "User not found"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /auth/resend-otp [post]
+// @Router /auth/password/reset/resend [post]
 // ResendOTP resends the OTP to the user's email
 func (h *AuthHandler) ResendOTP(c *gin.Context) {
 	var req resendOTPRequest

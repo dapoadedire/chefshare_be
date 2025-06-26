@@ -77,54 +77,11 @@ info:
   title: ChefShare API
   version: "1.0"
 paths:
-  /auth/forgot-password:
-    post:
-      consumes:
-      - application/json
-      description: Initiates the password reset process by sending an OTP to the user's
-        email
-      parameters:
-      - description: Email for reset
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/api.requestOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OTP sent to email
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: User not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Request password reset
-      tags:
-      - Password Reset
   /auth/login:
     post:
       consumes:
       - application/json
-      description: Authenticates a user and returns a session token
+      description: Authenticates a user and returns access and refresh tokens
       parameters:
       - description: User login credentials
         in: body
@@ -136,7 +93,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Login successful with user info
+          description: Login successful with user info and tokens
           schema:
             additionalProperties: true
             type: object
@@ -163,7 +120,19 @@ paths:
       - Authentication
   /auth/logout:
     post:
-      description: Ends the current user session
+      consumes:
+      - application/json
+      description: Ends the current user session by revoking the refresh token
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            refresh_token:
+              type: string
+          type: object
       produces:
       - application/json
       responses:
@@ -173,8 +142,14 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "400":
+          description: Missing refresh token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
-          description: Unauthorized or no session found
+          description: Unauthorized
           schema:
             additionalProperties:
               type: string
@@ -218,7 +193,86 @@ paths:
       summary: Get current authenticated user
       tags:
       - Authentication
-  /auth/resend-otp:
+  /auth/password/reset/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Verifies the OTP sent to user's email and resets the password
+      parameters:
+      - description: OTP verification and new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.verifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successful
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request or OTP
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify OTP and reset password
+      tags:
+      - Password Reset
+  /auth/password/reset/request:
+    post:
+      consumes:
+      - application/json
+      description: Initiates the password reset process by sending an OTP to the user's
+        email
+      parameters:
+      - description: Email for reset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.requestOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OTP sent to email
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Request password reset
+      tags:
+      - Password Reset
+  /auth/password/reset/resend:
     post:
       consumes:
       - application/json
@@ -245,12 +299,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-        "404":
-          description: User not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
         "500":
           description: Internal server error
           schema:
@@ -260,55 +308,7 @@ paths:
       summary: Resend OTP
       tags:
       - Password Reset
-  /auth/reset-password:
-    post:
-      consumes:
-      - application/json
-      description: Verifies the OTP sent to user's email and resets the password
-      parameters:
-      - description: OTP verification and new password
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/api.verifyOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Password reset successful
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Invalid OTP
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: User not found or OTP expired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Verify OTP and reset password
-      tags:
-      - Password Reset
-  /auth/signup:
+  /auth/register:
     post:
       consumes:
       - application/json
@@ -349,7 +349,45 @@ paths:
       summary: Register a new user
       tags:
       - Authentication
-  /users/update:
+  /auth/token/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Validates refresh token and issues a new access token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            refresh_token:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New access token
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh JWT access token
+      tags:
+      - Authentication
+  /users/me:
     put:
       consumes:
       - application/json
@@ -381,8 +419,14 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "409":
-          description: Username or email already exists
+          description: Username already exists
           schema:
             additionalProperties:
               type: string
@@ -398,7 +442,7 @@ paths:
       summary: Update user profile
       tags:
       - Users
-  /users/update_password:
+  /users/me/password:
     put:
       consumes:
       - application/json
@@ -420,13 +464,19 @@ paths:
               type: string
             type: object
         "400":
-          description: Invalid request
+          description: Invalid request or password requirements not met
           schema:
             additionalProperties:
               type: string
             type: object
         "401":
           description: Unauthorized or incorrect current password
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: User not found
           schema:
             additionalProperties:
               type: string

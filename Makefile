@@ -7,3 +7,13 @@ run:
 	fi
 	@echo "Running the application..."
 	@go run main.go
+
+docs:
+	$(shell go env GOPATH)/bin/swag init -g main.go
+
+docker-down:
+	@echo "Stopping and removing Docker containers..."
+	@docker compose down -v
+docker-up:
+	@echo "Starting Docker containers..."
+	@docker compose up -d

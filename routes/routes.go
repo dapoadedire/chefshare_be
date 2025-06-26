@@ -14,6 +14,12 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 	setupRefreshTokenCleanup(router, app)
 
 	// Root welcome route
+	// @Summary Welcome endpoint
+	// @Description Returns a welcome message with API version
+	// @Tags Welcome
+	// @Produce json
+	// @Success 200 {object} map[string]interface{} "Welcome message"
+	// @Router / [get]
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Welcome to ChefShare API",
@@ -24,7 +30,13 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 	// Versioned API routes
 	v1 := router.Group("/api/v1")
 	{
-		// Health check
+		// Health check endpoint
+		// @Summary Health check endpoint
+		// @Description Returns the API's health status
+		// @Tags Health
+		// @Produce json
+		// @Success 200 {object} map[string]interface{} "API is healthy"
+		// @Router /api/v1/health [get]
 		v1.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"status":    "ok",

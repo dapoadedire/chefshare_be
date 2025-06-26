@@ -58,7 +58,7 @@ func NewAuthHandler(
 	}
 }
 
-// SignUp godoc
+// RegisterUser godoc
 // @Summary Register a new user
 // @Description Register a new user with the provided information
 // @Tags Authentication
@@ -69,7 +69,7 @@ func NewAuthHandler(
 // @Failure 400 {object} map[string]string "Invalid request"
 // @Failure 409 {object} map[string]string "Username or email already exists"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /auth/signup [post]
+// @Router /auth/register [post]
 func (h *AuthHandler) RegisterUser(c *gin.Context) {
 	var req registeredUserRequest
 	err := c.ShouldBindJSON(&req)
@@ -202,14 +202,14 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 	})
 }
 
-// Login godoc
+// LoginUser godoc
 // @Summary User login
-// @Description Authenticates a user and returns a session token
+// @Description Authenticates a user and returns access and refresh tokens
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param credentials body loginRequest true "User login credentials"
-// @Success 200 {object} map[string]interface{} "Login successful with user info"
+// @Success 200 {object} map[string]interface{} "Login successful with user info and tokens"
 // @Failure 400 {object} map[string]string "Invalid request"
 // @Failure 401 {object} map[string]string "Invalid credentials"
 // @Failure 500 {object} map[string]string "Internal server error"
@@ -278,13 +278,16 @@ func (h *AuthHandler) LoginUser(c *gin.Context) {
 	})
 }
 
-// Logout godoc
+// LogoutUser godoc
 // @Summary Logout user
 // @Description Ends the current user session by revoking the refresh token
 // @Tags Authentication
+// @Accept json
 // @Produce json
+// @Param request body object{refresh_token=string} true "Refresh token to revoke"
 // @Success 200 {object} map[string]string "Logout successful"
-// @Failure 401 {object} map[string]string "Unauthorized or no token found"
+// @Failure 400 {object} map[string]string "Missing refresh token"
+// @Failure 401 {object} map[string]string "Unauthorized"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/logout [post]
 // @Security BearerAuth
@@ -314,15 +317,17 @@ func (h *AuthHandler) LogoutUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
-// RefreshToken godoc
+// RefreshAccessToken godoc
 // @Summary Refresh JWT access token
 // @Description Validates refresh token and issues a new access token
 // @Tags Authentication
+// @Accept json
 // @Produce json
+// @Param request body object{refresh_token=string} true "Refresh token"
 // @Success 200 {object} map[string]interface{} "New access token"
 // @Failure 401 {object} map[string]string "Invalid or expired refresh token"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Router /auth/refresh [post]
+// @Router /auth/token/refresh [post]
 func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 	// Get refresh token from request body
 	var req struct {
@@ -360,7 +365,7 @@ func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 	})
 }
 
-// GetCurrentUser godoc
+// GetAuthenticatedUser godoc
 // @Summary Get current authenticated user
 // @Description Returns the profile of the currently authenticated user
 // @Tags Authentication

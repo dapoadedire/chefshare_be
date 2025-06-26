@@ -9,6 +9,8 @@ import (
 )
 
 // PasswordResetCleanupMiddleware periodically cleans up expired password reset tokens
+// It runs in the background at the specified interval and removes tokens that
+// have passed their expiration time, freeing up database resources
 func PasswordResetCleanupMiddleware(passwordResetStore store.PasswordResetStore, cleanupInterval time.Duration) gin.HandlerFunc {
 	// Start cleanup goroutine
 	go func() {
