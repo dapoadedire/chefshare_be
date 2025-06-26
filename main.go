@@ -37,6 +37,9 @@ func main() {
 		ginMode = gin.DebugMode
 	}
 	gin.SetMode(ginMode)
+	
+	// Set up Swagger host dynamically based on environment
+	setupSwaggerInfo()
 
 	// Create router
 	router := gin.Default()
