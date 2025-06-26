@@ -280,9 +280,28 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		// Continue to clear cookie anyway
 	}
 
-	// Clear cookie
+	// Check for iOS user agent to apply special settings
+	userAgent := c.Request.UserAgent()
+	sameSiteMode := http.SameSiteNoneMode
+
+	if strings.Contains(userAgent, "iPhone") || strings.Contains(userAgent, "iPad") || strings.Contains(userAgent, "iPod") {
+		sameSiteMode = http.SameSiteLaxMode
+	}
+
+	// Clear cookie with appropriate SameSite mode
 	domain := getDomainFromEnv()
-	c.SetCookie("auth_token", "", -1, "/", domain, true, true)
+	cookie := &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Path:     "/",
+		Domain:   domain,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: sameSiteMode,
+		Expires:  time.Unix(0, 0),
+	}
+	http.SetCookie(c.Writer, cookie)
 
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
@@ -338,6 +357,15 @@ func setCookieForSession(c *gin.Context, session *store.Session) {
 	domain := getDomainFromEnv()
 	maxAge := int(DefaultSessionDuration.Seconds())
 
+	// Check for iOS user agent to apply special settings
+	userAgent := c.Request.UserAgent()
+	sameSiteMode := http.SameSiteNoneMode
+
+	// iOS Safari has issues with SameSiteNone, use Lax for iOS
+	if strings.Contains(userAgent, "iPhone") || strings.Contains(userAgent, "iPad") || strings.Contains(userAgent, "iPod") {
+		sameSiteMode = http.SameSiteLaxMode
+	}
+
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "auth_token",
 		Value:    session.Token,
@@ -346,7 +374,7 @@ func setCookieForSession(c *gin.Context, session *store.Session) {
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: sameSiteMode,
 		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
 	})
 }
