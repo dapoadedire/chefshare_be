@@ -1,9 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 	"github.com/dapoadedire/chefshare_be/store"
 	"github.com/dapoadedire/chefshare_be/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -35,17 +36,25 @@ type registeredUserRequest struct {
 
 type AuthHandler struct {
 	UserStore          store.UserStore
-	SessionStore       store.SessionStore
+	RefreshTokenStore  store.RefreshTokenStore
 	PasswordResetStore store.PasswordResetStore
 	EmailService       *services.EmailService
+	JWTService         *services.JWTService
 }
 
-func NewAuthHandler(userStore store.UserStore, sessionStore store.SessionStore, passwordResetStore store.PasswordResetStore, emailService *services.EmailService) *AuthHandler {
+func NewAuthHandler(
+	userStore store.UserStore,
+	refreshTokenStore store.RefreshTokenStore,
+	passwordResetStore store.PasswordResetStore,
+	emailService *services.EmailService,
+	jwtService *services.JWTService,
+) *AuthHandler {
 	return &AuthHandler{
 		UserStore:          userStore,
-		SessionStore:       sessionStore,
+		RefreshTokenStore:  refreshTokenStore,
 		PasswordResetStore: passwordResetStore,
 		EmailService:       emailService,
+		JWTService:         jwtService,
 	}
 }
 
@@ -117,6 +126,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 
 	// Create user model
 	user := &store.User{
+		UserID:         uuid.New().String(),
 		Username:       req.Username,
 		Email:          req.Email,
 		Bio:            req.Bio,
@@ -142,16 +152,19 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	// Create session
-	session, err := h.SessionStore.CreateSession(int64(user.ID), DefaultSessionDuration)
+	// Generate JWT tokens
+	ipAddress := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+	fmt.Printf("User %s signed up from IP: %s, User-Agent: %s\n", user.Username, ipAddress, userAgent)
+
+	accessToken, refreshToken, err := h.JWTService.GenerateTokenPair(user, ipAddress, userAgent)
 	if err != nil {
-		log.Printf("Failed to create session: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+		log.Printf("Failed to generate token pair: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate auth tokens"})
 		return
 	}
 
-	// Set cookie
-	setCookieForSession(c, session)
+	// No longer setting cookies as tokens will be stored in localStorage
 
 	// Send welcome email async
 	if h.EmailService != nil {
@@ -169,11 +182,15 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		}()
 	}
 
-	// Return success without exposing the session token in the response body
+	// Return success with tokens
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "user created successfully",
+		"tokens": gin.H{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken.Token,
+		},
 		"user": gin.H{
-			"id":              user.ID,
+			"user_id":         user.UserID,
 			"username":        user.Username,
 			"email":           user.Email,
 			"bio":             user.Bio,
@@ -228,22 +245,28 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Create session
-	session, err := h.SessionStore.CreateSession(int64(user.ID), DefaultSessionDuration)
+	// Generate JWT tokens
+	ipAddress := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+
+	accessToken, refreshToken, err := h.JWTService.GenerateTokenPair(user, ipAddress, userAgent)
 	if err != nil {
-		log.Printf("Failed to create session: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+		log.Printf("Failed to generate token pair: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate auth tokens"})
 		return
 	}
 
-	// Set cookie
-	setCookieForSession(c, session)
+	// No longer setting cookies as tokens will be stored in localStorage
 
 	// Return success
 	c.JSON(http.StatusOK, gin.H{
 		"message": "login successful",
+		"tokens": gin.H{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken.Token,
+		},
 		"user": gin.H{
-			"id":              user.ID,
+			"user_id":         user.UserID,
 			"username":        user.Username,
 			"email":           user.Email,
 			"bio":             user.Bio,
@@ -257,53 +280,84 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 // Logout godoc
 // @Summary Logout user
-// @Description Ends the current user session
+// @Description Ends the current user session by revoking the refresh token
 // @Tags Authentication
 // @Produce json
 // @Success 200 {object} map[string]string "Logout successful"
-// @Failure 401 {object} map[string]string "Unauthorized or no session found"
+// @Failure 401 {object} map[string]string "Unauthorized or no token found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/logout [post]
 // @Security BearerAuth
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// Get token from cookie
-	token, err := c.Cookie("auth_token")
-	if err != nil {
+	// Get refresh token from request body
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing refresh token"})
+		return
+	}
+	
+	refreshTokenString := req.RefreshToken
+	if refreshTokenString == "" {
 		c.JSON(http.StatusOK, gin.H{"message": "no active session"})
 		return
 	}
 
-	// Delete session from DB
-	err = h.SessionStore.DeleteSession(token)
+	// Revoke refresh token in DB
+	err := h.JWTService.RevokeRefreshToken(refreshTokenString)
 	if err != nil {
-		log.Printf("Failed to delete session: %v", err)
-		// Continue to clear cookie anyway
+		log.Printf("Failed to revoke refresh token: %v", err)
 	}
-
-	// Check for iOS user agent to apply special settings
-	userAgent := c.Request.UserAgent()
-	sameSiteMode := http.SameSiteNoneMode
-
-	if strings.Contains(userAgent, "iPhone") || strings.Contains(userAgent, "iPad") || strings.Contains(userAgent, "iPod") {
-		sameSiteMode = http.SameSiteLaxMode
-	}
-
-	// Clear cookie with appropriate SameSite mode
-	domain := getDomainFromEnv()
-	cookie := &http.Cookie{
-		Name:     "auth_token",
-		Value:    "",
-		Path:     "/",
-		Domain:   domain,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: sameSiteMode,
-		Expires:  time.Unix(0, 0),
-	}
-	http.SetCookie(c.Writer, cookie)
 
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
+}
+
+// RefreshToken godoc
+// @Summary Refresh JWT access token
+// @Description Validates refresh token and issues a new access token
+// @Tags Authentication
+// @Produce json
+// @Success 200 {object} map[string]interface{} "New access token"
+// @Failure 401 {object} map[string]string "Invalid or expired refresh token"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /auth/refresh [post]
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	// Get refresh token from request body
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
+		return
+	}
+	
+	refreshTokenString := req.RefreshToken
+	if refreshTokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
+		return
+	}
+
+	// Use the token to generate a new access token
+	newAccessToken, _, err := h.JWTService.RefreshAccessToken(refreshTokenString)
+	if err != nil {
+		log.Printf("Failed to refresh token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	// No longer setting cookies as tokens will be stored in localStorage
+
+	// Return new access token
+	c.JSON(http.StatusOK, gin.H{
+		"message": "token refreshed",
+		"tokens": gin.H{
+			"access_token": newAccessToken,
+			"refresh_token": refreshTokenString, // Include the refresh token for frontend storage
+		},
+	})
 }
 
 // GetCurrentUser godoc
@@ -318,6 +372,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Router /auth/me [get]
 func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)
+	// Note: The JWT auth middleware will set this from the token claims
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -325,7 +380,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	// Get user from database
-	user, err := h.UserStore.GetUserByID(userID.(int64))
+	user, err := h.UserStore.GetUserByID(userID.(string))
 	if err != nil {
 		log.Printf("Failed to get user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -340,7 +395,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	// Return user info
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
-			"id":              user.ID,
+			"user_id":              user.UserID,
 			"username":        user.Username,
 			"email":           user.Email,
 			"bio":             user.Bio,
@@ -352,38 +407,5 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	})
 }
 
-// Helper to set a cookie for a session
-func setCookieForSession(c *gin.Context, session *store.Session) {
-	domain := getDomainFromEnv()
-	maxAge := int(DefaultSessionDuration.Seconds())
-
-	// Check for iOS user agent to apply special settings
-	userAgent := c.Request.UserAgent()
-	sameSiteMode := http.SameSiteNoneMode
-
-	// iOS Safari has issues with SameSiteNone, use Lax for iOS
-	if strings.Contains(userAgent, "iPhone") || strings.Contains(userAgent, "iPad") || strings.Contains(userAgent, "iPod") {
-		sameSiteMode = http.SameSiteLaxMode
-	}
-
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "auth_token",
-		Value:    session.Token,
-		Path:     "/",
-		Domain:   domain,
-		MaxAge:   maxAge,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: sameSiteMode,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-	})
-}
-
-// Helper to get the domain for cookies from environment variable
-func getDomainFromEnv() string {
-	domain := os.Getenv("COOKIE_DOMAIN")
-	if domain == "" {
-		return "localhost" // Default for local development
-	}
-	return domain
-}
+// These helper functions have been removed as we no longer use cookies for token storage
+// The frontend will store tokens in localStorage instead

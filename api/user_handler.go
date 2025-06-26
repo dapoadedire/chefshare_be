@@ -61,7 +61,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	userID, ok := userIDValue.(int64)
+	userID, ok := userIDValue.(string)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID"})
 		return
@@ -171,7 +171,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "no changes to update",
 			"user": gin.H{
-				"id":              user.ID,
+				"user_id":         user.UserID,
 				"username":        user.Username,
 				"email":           user.Email,
 				"bio":             user.Bio,
@@ -197,7 +197,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "profile updated successfully",
 		"user": gin.H{
-			"id":              updatedUser.ID,
+			"user_id":         updatedUser.UserID,
 			"username":        updatedUser.Username,
 			"email":           updatedUser.Email,
 			"bio":             updatedUser.Bio,
@@ -232,7 +232,7 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 
-	userID, ok := userIDValue.(int64)
+	userID, ok := userIDValue.(string)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID"})
 		return
@@ -303,12 +303,12 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 }
 
 // Helper function to check if a username is already taken by another user
-func (h *UserHandler) checkUsernameExists(username string, excludeUserID int64) (bool, error) {
+func (h *UserHandler) checkUsernameExists(username string, excludeUserID string) (bool, error) {
 
 	query := `
 		SELECT COUNT(*) 
 		FROM users 
-		WHERE username = $1 AND id != $2
+		WHERE username = $1 AND user_id != $2
 	`
 
 	var count int
@@ -321,7 +321,7 @@ func (h *UserHandler) checkUsernameExists(username string, excludeUserID int64) 
 }
 
 // Helper function to update user profile in the database
-func (h *UserHandler) updateUserInDatabase(userID int64, changes map[string]interface{}) (*store.User, error) {
+func (h *UserHandler) updateUserInDatabase(userID string, changes map[string]interface{}) (*store.User, error) {
 	// Use the UpdateUser method from the UserStore interface
 	if err := h.UserStore.UpdateUser(userID, changes); err != nil {
 		return nil, err

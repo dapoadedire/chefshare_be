@@ -13,7 +13,7 @@ type password struct {
 }
 
 type User struct {
-	ID             int      `json:"id"`
+	UserID         string   `json:"user_id"` 
 	Username       string   `json:"username"`
 	Email          string   `json:"email"`
 	PasswordHash   password `json:"password_hash"`
@@ -45,11 +45,11 @@ type PostgresUserStore struct {
 }
 
 func (s *PostgresUserStore) CreateUser(user *User) error {
-	query := `INSERT INTO users(username, email, password_hash, bio, first_name, last_name, profile_picture)
-	VALUES($1,$2,$3,$4,$5,$6,$7)
-	RETURNING id, created_at, updated_at
+	query := `INSERT INTO users(user_id, username, email, password_hash, bio, first_name, last_name, profile_picture)
+	VALUES($1,$2,$3,$4,$5,$6,$7, $8)
+	RETURNING user_id, created_at, updated_at
 	`
-	err := s.db.QueryRow(query, user.Username, user.Email, user.PasswordHash.hash, user.Bio, user.FirstName, user.LastName, user.ProfilePicture).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
+	err := s.db.QueryRow(query, user.UserID, user.Username, user.Email, user.PasswordHash.hash, user.Bio, user.FirstName, user.LastName, user.ProfilePicture).Scan(&user.UserID, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (s *PostgresUserStore) CreateUser(user *User) error {
 
 func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 	query := `
-		SELECT id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
+		SELECT user_id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
 		       last_login, created_at, updated_at
 		FROM users
 		WHERE email = $1
@@ -69,7 +69,7 @@ func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 	var passwordHash []byte
 
 	err := s.db.QueryRow(query, email).Scan(
-		&user.ID,
+		&user.UserID,
 		&user.Username,
 		&user.Email,
 		&passwordHash,
@@ -93,19 +93,19 @@ func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 	return user, nil
 }
 
-func (s *PostgresUserStore) GetUserByID(id int64) (*User, error) {
+func (s *PostgresUserStore) GetUserByID(userID string) (*User, error) {
 	query := `
-		SELECT id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
+		SELECT user_id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
 		       last_login, created_at, updated_at
 		FROM users
-		WHERE id = $1
+		WHERE user_id = $1
 	`
 
 	user := &User{}
 	var passwordHash []byte
 
-	err := s.db.QueryRow(query, id).Scan(
-		&user.ID,
+	err := s.db.QueryRow(query, userID).Scan(
+		&user.UserID,
 		&user.Username,
 		&user.Email,
 		&passwordHash,
@@ -132,13 +132,13 @@ func (s *PostgresUserStore) GetUserByID(id int64) (*User, error) {
 type UserStore interface {
 	CreateUser(user *User) error
 	GetUserByEmail(email string) (*User, error)
-	GetUserByID(id int64) (*User, error)
-	UpdatePassword(userID int64, newPassword string) error
-	UpdateUser(userID int64, updates map[string]interface{}) error
+	GetUserByID(userID string) (*User, error)
+	UpdatePassword(userID string, newPassword string) error
+	UpdateUser(userID string, updates map[string]interface{}) error
 }
 
 // UpdatePassword updates a user's password
-func (s *PostgresUserStore) UpdatePassword(userID int64, newPassword string) error {
+func (s *PostgresUserStore) UpdatePassword(userID string, newPassword string) error {
 	// Create a temporary password struct to generate the hash
 	var pass password
 	if err := pass.SetPassword(newPassword); err != nil {
@@ -161,7 +161,7 @@ func (s *PostgresUserStore) UpdatePassword(userID int64, newPassword string) err
 }
 
 // UpdateUser updates user profile information
-func (s *PostgresUserStore) UpdateUser(userID int64, updates map[string]interface{}) error {
+func (s *PostgresUserStore) UpdateUser(userID string, updates map[string]interface{}) error {
 	if len(updates) == 0 {
 		return nil
 	}

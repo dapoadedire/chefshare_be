@@ -15,9 +15,10 @@ type Application struct {
 	AuthHandler        *api.AuthHandler
 	UserHandler        *api.UserHandler
 	EmailService       *services.EmailService
-	SessionStore       store.SessionStore
 	UserStore          store.UserStore
 	PasswordResetStore store.PasswordResetStore
+	RefreshTokenStore  store.RefreshTokenStore
+	JWTService         *services.JWTService
 }
 
 func NewApplication() (*Application, error) {
@@ -40,10 +41,21 @@ func NewApplication() (*Application, error) {
 	}
 
 	userStore := store.NewPostgresUserStore(pgDB)
-	sessionStore := store.NewPostgresSessionStore(pgDB)
 	passwordResetStore := store.NewPostgresPasswordResetStore(pgDB)
+	refreshTokenStore := store.NewPostgresRefreshTokenStore(pgDB)
+	
+	// Initialize JWT service with default configuration
+	jwtConfig := services.DefaultJWTConfig()
+	jwtService := services.NewJWTService(jwtConfig, refreshTokenStore, userStore)
 
-	authHandler := api.NewAuthHandler(userStore, sessionStore, passwordResetStore, emailService)
+	// This will be fully removed in a future update
+	authHandler := api.NewAuthHandler(
+		userStore, 
+		refreshTokenStore, 
+		passwordResetStore, 
+		emailService, 
+		jwtService,
+	)
 	userHandler := api.NewUserHandler(userStore, emailService)
 
 	app := &Application{
@@ -52,8 +64,9 @@ func NewApplication() (*Application, error) {
 		UserHandler:        userHandler,
 		EmailService:       emailService,
 		UserStore:          userStore,
-		SessionStore:       sessionStore,
 		PasswordResetStore: passwordResetStore,
+		RefreshTokenStore:  refreshTokenStore,
+		JWTService:         jwtService,
 	}
 
 	return app, nil

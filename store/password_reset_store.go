@@ -9,7 +9,7 @@ import (
 
 type PasswordResetToken struct {
 	ID        int64
-	UserID    int64
+	UserID    string
 	Token     string
 	ExpiresAt time.Time
 	Used      bool
@@ -17,11 +17,11 @@ type PasswordResetToken struct {
 }
 
 type PasswordResetStore interface {
-	CreatePasswordResetToken(userID int64, expiryDuration time.Duration) (*PasswordResetToken, error)
+	CreatePasswordResetToken(userID string, expiryDuration time.Duration) (*PasswordResetToken, error)
 	GetPasswordResetTokenByToken(token string) (*PasswordResetToken, error)
 	MarkTokenAsUsed(tokenID int64) error
 	DeleteExpiredTokens() (int64, error)
-	DeleteUserTokens(userID int64) (int64, error)
+	DeleteUserTokens(userID string) (int64, error)
 }
 
 type PostgresPasswordResetStore struct {
@@ -46,7 +46,7 @@ func generateOTP() string {
 }
 
 // CreatePasswordResetToken creates a new password reset token for the given user
-func (s *PostgresPasswordResetStore) CreatePasswordResetToken(userID int64, expiryDuration time.Duration) (*PasswordResetToken, error) {
+func (s *PostgresPasswordResetStore) CreatePasswordResetToken(userID string, expiryDuration time.Duration) (*PasswordResetToken, error) {
 	// First, invalidate any existing tokens for this user
 	_, err := s.DeleteUserTokens(userID)
 	if err != nil {
@@ -139,7 +139,7 @@ func (s *PostgresPasswordResetStore) DeleteExpiredTokens() (int64, error) {
 }
 
 // DeleteUserTokens removes all tokens for a specific user
-func (s *PostgresPasswordResetStore) DeleteUserTokens(userID int64) (int64, error) {
+func (s *PostgresPasswordResetStore) DeleteUserTokens(userID string) (int64, error) {
 	query := `DELETE FROM password_reset_tokens WHERE user_id = $1`
 
 	result, err := s.db.Exec(query, userID)

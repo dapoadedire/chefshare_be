@@ -51,7 +51,7 @@ func main() {
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Type"},
-		AllowCredentials: true, // Needed for cookies
+		AllowCredentials: false, // No longer needed as we don't use cookies
 		MaxAge:           12 * time.Hour,
 	}))
 

@@ -1,106 +1,49 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
-	"time"
+	"strings"
 
-	"github.com/dapoadedire/chefshare_be/store"
+	"github.com/dapoadedire/chefshare_be/services"
 	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware creates a middleware for authentication
-func AuthMiddleware(sessionStore store.SessionStore) gin.HandlerFunc {
+// JWTAuthMiddleware creates a middleware for JWT authentication
+func JWTAuthMiddleware(jwtService *services.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get the token from the cookie
-		token, err := c.Cookie("auth_token")
-		if err != nil {
+		// Only check Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
-
-		// Get the session from the database
-		session, err := sessionStore.GetSessionByToken(token)
+		
+		// Check for Bearer prefix
+		parts := strings.SplitN(authHeader, " ", 2)
+		if !(len(parts) == 2 && parts[0] == "Bearer") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format"})
+			return
+		}
+		
+		accessToken := parts[1]
+		
+		// Validate the token
+		claims, err := jwtService.ValidateAccessToken(accessToken)
 		if err != nil {
-			log.Printf("Error retrieving session: %v", err)
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 			return
 		}
-
-		// Check if session exists and is valid
-		if session == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
-			return
-		}
-
-		// Check if session is expired
-		if session.ExpiresAt.Before(time.Now()) {
-			// Clean up expired session
-			_ = sessionStore.DeleteSession(token)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired"})
-			return
-		}
-
-		// Set user ID in context for handlers to use
-		c.Set("user_id", session.UserID)
-		c.Set("session_token", session.Token)
-
+		
+		// Set claims in context for handlers to use
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("email", claims.Email)
+		
 		// Continue processing the request
 		c.Next()
 	}
 }
 
-// OptionalAuthMiddleware creates a middleware that authenticates if a token is present but doesn't abort if not
-func OptionalAuthMiddleware(sessionStore store.SessionStore) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Get the token from the cookie
-		token, err := c.Cookie("auth_token")
-		if err != nil {
-			// No cookie, continue without authentication
-			c.Next()
-			return
-		}
 
-		// Get the session from the database
-		session, err := sessionStore.GetSessionByToken(token)
-		if err != nil {
-			// Log error but continue
-			log.Printf("Error retrieving session: %v", err)
-			c.Next()
-			return
-		}
 
-		// Check if session exists and is not expired
-		if session != nil && session.ExpiresAt.After(time.Now()) {
-			// Set user ID in context
-			c.Set("user_id", session.UserID)
-			c.Set("session_token", session.Token)
-		}
 
-		// Continue processing the request
-		c.Next()
-	}
-}
-
-// SessionCleanupMiddleware periodically cleans up expired sessions
-func SessionCleanupMiddleware(sessionStore store.SessionStore, cleanupInterval time.Duration) gin.HandlerFunc {
-	// Start cleanup goroutine
-	go func() {
-		ticker := time.NewTicker(cleanupInterval)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			count, err := sessionStore.DeleteExpiredSessions()
-			if err != nil {
-				log.Printf("Error cleaning up expired sessions: %v", err)
-			} else if count > 0 {
-				log.Printf("Cleaned up %d expired sessions", count)
-			}
-		}
-	}()
-
-	// Return a pass-through middleware
-	return func(c *gin.Context) {
-		c.Next()
-	}
-}

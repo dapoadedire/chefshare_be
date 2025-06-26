@@ -76,7 +76,7 @@ func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	}
 
 	// Generate and store OTP
-	token, err := h.PasswordResetStore.CreatePasswordResetToken(int64(user.ID), OTPExpiry)
+	token, err := h.PasswordResetStore.CreatePasswordResetToken(string(user.UserID), OTPExpiry)
 	if err != nil {
 		log.Printf("Error creating password reset token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create reset token"})
@@ -172,13 +172,13 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 	}
 
 	// Verify token exists, matches user, is not used, and is not expired
-	if token == nil || token.UserID != int64(user.ID) || token.Used || token.ExpiresAt.Before(time.Now()) {
+	if token == nil || token.UserID != user.UserID || token.Used || token.ExpiresAt.Before(time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired OTP"})
 		return
 	}
 
 	// Update user's password
-	err = h.UserStore.UpdatePassword(int64(user.ID), req.Password)
+	err = h.UserStore.UpdatePassword(user.UserID, req.Password)
 	if err != nil {
 		log.Printf("Error updating password: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
@@ -192,12 +192,8 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 		// Continue processing as the password has already been changed
 	}
 
-	// Invalidate all sessions for this user to force re-login with new password
-	_, err = h.SessionStore.DeleteUserSessions(int64(user.ID))
-	if err != nil {
-		log.Printf("Error deleting user sessions: %v", err)
-		// Continue as this is not critical
-	}
+	// With JWT auth, we no longer need to invalidate sessions
+	// Users will need to obtain a new token with their new password
 
 	// Send confirmation email
 	if h.EmailService != nil {
@@ -263,7 +259,7 @@ func (h *AuthHandler) ResendOTP(c *gin.Context) {
 	}
 
 	// Generate and store a new OTP (this will invalidate any existing ones)
-	token, err := h.PasswordResetStore.CreatePasswordResetToken(int64(user.ID), OTPExpiry)
+	token, err := h.PasswordResetStore.CreatePasswordResetToken(user.UserID, OTPExpiry)
 	if err != nil {
 		log.Printf("Error creating password reset token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create reset token"})

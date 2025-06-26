@@ -9,11 +9,28 @@ import (
 )
 
 func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
-	// Setup session cleanup middleware (run every 6 hours)
-	router.Use(middleware.SessionCleanupMiddleware(app.SessionStore, 6*time.Hour))
-
 	// Setup password reset token cleanup middleware (run every hour)
 	router.Use(middleware.PasswordResetCleanupMiddleware(app.PasswordResetStore, 1*time.Hour))
+	
+	// Setup refresh token cleanup (run every 12 hours)
+	router.Use(func(c *gin.Context) {
+		go func() {
+			ticker := time.NewTicker(12 * time.Hour)
+			defer ticker.Stop()
+	
+			for range ticker.C {
+				count, err := app.RefreshTokenStore.DeleteExpiredRefreshTokens()
+				if err != nil {
+					// Log the error but continue
+					c.Error(err)
+				} else if count > 0 {
+					// Log the number of tokens deleted
+					// This is just for information purposes
+				}
+			}
+		}()
+		c.Next()
+	})
 
 	// Welcome endpoint
 	// @Summary Welcome endpoint
@@ -51,24 +68,29 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 		{
 			auth.POST("/signup", app.AuthHandler.SignUp)
 			auth.POST("/login", app.AuthHandler.Login)
-			auth.POST("/logout", app.AuthHandler.Logout)
-
+			
+			// New refresh token endpoint
+			auth.POST("/refresh", app.AuthHandler.RefreshToken)
+			
 			// Password reset flow
 			auth.POST("/forgot-password", app.AuthHandler.RequestPasswordReset)
 			auth.POST("/reset-password", app.AuthHandler.VerifyOTPAndResetPassword)
 			auth.POST("/resend-otp", app.AuthHandler.ResendOTP)
 
-			// Protected route that requires authentication
+			// Protected routes that require authentication (JWT)
 			authRequired := auth.Group("")
-			authRequired.Use(middleware.AuthMiddleware(app.SessionStore))
+			authRequired.Use(middleware.JWTAuthMiddleware(app.JWTService))
 			{
 				authRequired.GET("/me", app.AuthHandler.GetCurrentUser)
+				authRequired.POST("/logout", app.AuthHandler.Logout) // Now requires auth
 			}
+			
+
 		}
 
-		// Protected routes that require authentication
+		// Protected routes that require JWT authentication
 		protected := v1.Group("")
-		protected.Use(middleware.AuthMiddleware(app.SessionStore))
+		protected.Use(middleware.JWTAuthMiddleware(app.JWTService))
 		{
 			// User routes
 			users := protected.Group("/users")
@@ -77,6 +99,8 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 				users.PUT("/update_password", app.UserHandler.UpdatePassword)
 			}
 		}
+		
+
 	}
 
 	return router
