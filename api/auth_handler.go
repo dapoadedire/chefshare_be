@@ -70,7 +70,7 @@ func NewAuthHandler(
 // @Failure 409 {object} map[string]string "Username or email already exists"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/signup [post]
-func (h *AuthHandler) SignUp(c *gin.Context) {
+func (h *AuthHandler) RegisterUser(c *gin.Context) {
 	var req registeredUserRequest
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
@@ -214,7 +214,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 // @Failure 401 {object} map[string]string "Invalid credentials"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/login [post]
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *AuthHandler) LoginUser(c *gin.Context) {
 	var req loginRequest
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
@@ -288,7 +288,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/logout [post]
 // @Security BearerAuth
-func (h *AuthHandler) Logout(c *gin.Context) {
+func (h *AuthHandler) LogoutUser(c *gin.Context) {
 	// Get refresh token from request body
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -323,7 +323,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Failure 401 {object} map[string]string "Invalid or expired refresh token"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/refresh [post]
-func (h *AuthHandler) RefreshToken(c *gin.Context) {
+func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 	// Get refresh token from request body
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -370,7 +370,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/me [get]
-func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
+func (h *AuthHandler) GetAuthenticatedUser(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)
 	// Note: The JWT auth middleware will set this from the token claims
 	userID, exists := c.Get("user_id")
