@@ -23,6 +23,7 @@ type RefreshToken struct {
 // RefreshTokenStore defines the interface for refresh token operations
 type RefreshTokenStore interface {
 	CreateRefreshToken(userID string, duration time.Duration, ipAddress, userAgent string) (*RefreshToken, error)
+	CreateRefreshTokenWithTransaction(userID string, duration time.Duration, ipAddress, userAgent string, tx *sql.Tx) (*RefreshToken, error)
 	GetRefreshToken(token string) (*RefreshToken, error)
 	RevokeRefreshToken(token string) error
 	RevokeAllUserRefreshTokens(userID string) (int64, error)
@@ -72,6 +73,42 @@ func (s *PostgresRefreshTokenStore) CreateRefreshToken(userID string, duration t
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh token: %w", err)
+	}
+
+	return refreshToken, nil
+}
+
+// CreateRefreshTokenWithTransaction creates a new refresh token for the given user within a transaction
+func (s *PostgresRefreshTokenStore) CreateRefreshTokenWithTransaction(userID string, duration time.Duration, ipAddress, userAgent string, tx *sql.Tx) (*RefreshToken, error) {
+	token := uuid.NewString()
+	expiresAt := time.Now().Add(duration)
+
+	refreshToken := &RefreshToken{
+		Token:     token,
+		UserID:    userID,
+		ExpiresAt: expiresAt,
+		Revoked:   false,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+	}
+
+	query := `
+		INSERT INTO refresh_tokens (token, user_id, expires_at, ip_address, user_agent)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, issued_at
+	`
+
+	err := tx.QueryRow(
+		query, 
+		refreshToken.Token, 
+		refreshToken.UserID, 
+		refreshToken.ExpiresAt,
+		refreshToken.IPAddress,
+		refreshToken.UserAgent,
+	).Scan(&refreshToken.ID, &refreshToken.IssuedAt)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create refresh token in transaction: %w", err)
 	}
 
 	return refreshToken, nil

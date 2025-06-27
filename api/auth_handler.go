@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -140,12 +141,39 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	// Insert into DB
-	err = h.UserStore.CreateUser(user)
+	// Get database connection from the store
+	db := h.UserStore.(interface{ DB() *sql.DB }).DB()
+
+	// Start a transaction for atomic operations
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Failed to begin transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+
+	// Defer a function to handle transaction completion based on success or failure
+	defer func() {
+		if err != nil {
+			// If we encountered an error, roll back the transaction
+			if txErr := tx.Rollback(); txErr != nil {
+				log.Printf("Failed to rollback transaction: %v", txErr)
+			}
+		}
+	}()
+
+	// Insert user into DB within the transaction
+	err = h.UserStore.CreateUserWithTransaction(user, tx)
 	if err != nil {
 		log.Printf("Failed to create user: %v", err)
 		if strings.Contains(err.Error(), "duplicate key") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "username or email already exists"})
+			if strings.Contains(err.Error(), "users_username_key") {
+				c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+			} else if strings.Contains(err.Error(), "users_email_key") {
+				c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+			} else {
+				c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
+			}
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create user"})
@@ -157,14 +185,20 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 	userAgent := c.Request.UserAgent()
 	fmt.Printf("User %s signed up from IP: %s, User-Agent: %s\n", user.Username, ipAddress, userAgent)
 
-	accessToken, refreshToken, err := h.JWTService.GenerateTokenPair(user, ipAddress, userAgent)
+	// Generate tokens within the transaction
+	accessToken, refreshToken, err := h.JWTService.GenerateTokenPairWithTransaction(user, ipAddress, userAgent, tx)
 	if err != nil {
 		log.Printf("Failed to generate token pair: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate auth tokens"})
 		return
 	}
 
-	// No longer setting cookies as tokens will be stored in localStorage
+	// Commit the transaction since both user creation and token generation succeeded
+	if err = tx.Commit(); err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
 
 	// Send welcome email async
 	if h.EmailService != nil {
@@ -245,6 +279,13 @@ func (h *AuthHandler) LoginUser(c *gin.Context) {
 		return
 	}
 
+	// Update last_login timestamp
+	err = h.UserStore.UpdateLastLogin(user.UserID)
+	if err != nil {
+		log.Printf("Failed to update last_login: %v", err)
+		// Continue with login process despite the error in updating last_login
+	}
+
 	// Generate JWT tokens
 	ipAddress := c.ClientIP()
 	userAgent := c.Request.UserAgent()
@@ -274,6 +315,7 @@ func (h *AuthHandler) LoginUser(c *gin.Context) {
 			"last_name":       user.LastName,
 			"profile_picture": user.ProfilePicture,
 			"created_at":      user.CreatedAt,
+			"last_login":      user.LastLogin,
 		},
 	})
 }
@@ -319,12 +361,12 @@ func (h *AuthHandler) LogoutUser(c *gin.Context) {
 
 // RefreshAccessToken godoc
 // @Summary Refresh JWT access token
-// @Description Validates refresh token and issues a new access token
+// @Description Validates refresh token and issues a new access token with token rotation
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param request body object{refresh_token=string} true "Refresh token"
-// @Success 200 {object} map[string]interface{} "New access token"
+// @Success 200 {object} map[string]interface{} "New access and refresh tokens"
 // @Failure 401 {object} map[string]string "Invalid or expired refresh token"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /auth/token/refresh [post]
@@ -345,22 +387,20 @@ func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 		return
 	}
 
-	// Use the token to generate a new access token
-	newAccessToken, _, err := h.JWTService.RefreshAccessToken(refreshTokenString)
+	// Use the token to generate a new access token and rotate the refresh token
+	newAccessToken, newRefreshToken, err := h.JWTService.RefreshAccessToken(refreshTokenString)
 	if err != nil {
 		log.Printf("Failed to refresh token: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
-	// No longer setting cookies as tokens will be stored in localStorage
-
-	// Return new access token
+	// Return new access token and new refresh token
 	c.JSON(http.StatusOK, gin.H{
 		"message": "token refreshed",
 		"tokens": gin.H{
-			"access_token": newAccessToken,
-			"refresh_token": refreshTokenString, // Include the refresh token for frontend storage
+			"access_token":  newAccessToken,
+			"refresh_token": newRefreshToken.Token,
 		},
 	})
 }
@@ -397,12 +437,13 @@ func (h *AuthHandler) GetAuthenticatedUser(c *gin.Context) {
 		return
 	}
 
-	// Return user info
+	// Return user info - email is included as the user is authenticated and it's their own data
+	// It's useful for the client to have this information for profile display and management
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
-			"user_id":              user.UserID,
+			"user_id":         user.UserID,
 			"username":        user.Username,
-			"email":           user.Email,
+			"email":           user.Email, // Email is kept as the user is viewing their own profile
 			"bio":             user.Bio,
 			"first_name":      user.FirstName,
 			"last_name":       user.LastName,

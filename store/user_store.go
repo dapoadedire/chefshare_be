@@ -57,6 +57,19 @@ func (s *PostgresUserStore) CreateUser(user *User) error {
 	return nil
 }
 
+func (s *PostgresUserStore) CreateUserWithTransaction(user *User, tx *sql.Tx) error {
+	query := `INSERT INTO users(user_id, username, email, password_hash, bio, first_name, last_name, profile_picture)
+	VALUES($1,$2,$3,$4,$5,$6,$7, $8)
+	RETURNING user_id, created_at, updated_at
+	`
+	err := tx.QueryRow(query, user.UserID, user.Username, user.Email, user.PasswordHash.hash, user.Bio, user.FirstName, user.LastName, user.ProfilePicture).Scan(&user.UserID, &user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 	query := `
 		SELECT user_id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
@@ -131,10 +144,14 @@ func (s *PostgresUserStore) GetUserByID(userID string) (*User, error) {
 
 type UserStore interface {
 	CreateUser(user *User) error
+	CreateUserWithTransaction(user *User, tx *sql.Tx) error
 	GetUserByEmail(email string) (*User, error)
 	GetUserByID(userID string) (*User, error)
 	UpdatePassword(userID string, newPassword string) error
-	UpdateUser(userID string, updates map[string]interface{}) error
+	UpdateUser(userID string, updates map[string]interface{}) (*User, error)
+	UpdateLastLogin(userID string) error
+	IsUsernameTaken(username string, excludeUserID string) (bool, error)
+	DB() *sql.DB
 }
 
 // UpdatePassword updates a user's password
@@ -160,10 +177,11 @@ func (s *PostgresUserStore) UpdatePassword(userID string, newPassword string) er
 	return nil
 }
 
-// UpdateUser updates user profile information
-func (s *PostgresUserStore) UpdateUser(userID string, updates map[string]interface{}) error {
+// UpdateUser updates user profile information and returns the updated user
+func (s *PostgresUserStore) UpdateUser(userID string, updates map[string]interface{}) (*User, error) {
 	if len(updates) == 0 {
-		return nil
+		// If there are no updates, just return the current user data
+		return s.GetUserByID(userID)
 	}
 
 	// Build the dynamic query
@@ -180,14 +198,47 @@ func (s *PostgresUserStore) UpdateUser(userID string, updates map[string]interfa
 		i++
 	}
 
-	// Add WHERE clause
-	query += " WHERE user_id = $" + fmt.Sprint(i)
+	// Add RETURNING clause to get the updated user data
+	query += " WHERE user_id = $" + fmt.Sprint(i) + " RETURNING user_id, username, email, password_hash, bio, first_name, last_name, profile_picture, last_login, created_at, updated_at"
 	params = append(params, userID)
 
-	// Execute the query
-	_, err := s.db.Exec(query, params...)
+	// Execute the query and scan results directly into a User object
+	user := &User{}
+	var passwordHash []byte
+
+	err := s.db.QueryRow(query, params...).Scan(
+		&user.UserID,
+		&user.Username,
+		&user.Email,
+		&passwordHash,
+		&user.Bio,
+		&user.FirstName,
+		&user.LastName,
+		&user.ProfilePicture,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
 	if err != nil {
-		return fmt.Errorf("failed to update user: %w", err)
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	user.PasswordHash.hash = passwordHash
+	return user, nil
+}
+
+// UpdateLastLogin updates the last_login timestamp for a user to the current time
+func (s *PostgresUserStore) UpdateLastLogin(userID string) error {
+	query := `
+		UPDATE users 
+		SET last_login = CURRENT_TIMESTAMP 
+		WHERE user_id = $1
+	`
+
+	_, err := s.db.Exec(query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update last_login: %w", err)
 	}
 
 	return nil
@@ -203,4 +254,21 @@ func NewPostgresUserStore(db *sql.DB) *PostgresUserStore {
 	return &PostgresUserStore{
 		db: db,
 	}
+}
+
+// IsUsernameTaken checks if a username is already taken by another user
+func (s *PostgresUserStore) IsUsernameTaken(username string, excludeUserID string) (bool, error) {
+	query := `
+		SELECT COUNT(*) 
+		FROM users 
+		WHERE username = $1 AND user_id != $2
+	`
+
+	var count int
+	err := s.db.QueryRow(query, username, excludeUserID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check username existence: %w", err)
+	}
+
+	return count > 0, nil
 }

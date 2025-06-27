@@ -56,7 +56,7 @@ func NewApplication() (*Application, error) {
 		emailService, 
 		jwtService,
 	)
-	userHandler := api.NewUserHandler(userStore, emailService)
+	userHandler := api.NewUserHandler(userStore, emailService, jwtService)
 
 	app := &Application{
 		DB:                 pgDB,

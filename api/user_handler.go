@@ -15,12 +15,14 @@ import (
 type UserHandler struct {
 	UserStore    store.UserStore
 	EmailService *services.EmailService
+	JWTService   *services.JWTService
 }
 
-func NewUserHandler(userStore store.UserStore, emailService *services.EmailService) *UserHandler {
+func NewUserHandler(userStore store.UserStore, emailService *services.EmailService, jwtService *services.JWTService) *UserHandler {
 	return &UserHandler{
 		UserStore:    userStore,
 		EmailService: emailService,
+		JWTService:   jwtService,
 	}
 }
 
@@ -126,7 +128,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		// Check if new username is different from current one
 		if username != user.Username {
 			// Check if username is already taken by another user
-			existingUser, err := h.checkUsernameExists(username, userID)
+			existingUser, err := h.UserStore.IsUsernameTaken(username, userID)
 			if err != nil {
 				log.Printf("Error checking username existence: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -187,7 +189,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	}
 
 	// Update user profile in database
-	updatedUser, err := h.updateUserInDatabase(userID, changes)
+	updatedUser, err := h.UserStore.UpdateUser(userID, changes)
 	if err != nil {
 		log.Printf("Failed to update user profile: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user profile"})
@@ -278,11 +280,46 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 
+	// Start a transaction for password update and token revocation
+	db := h.UserStore.DB()
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Failed to begin transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+	
+	// Defer a function to handle transaction completion based on success or failure
+	defer func() {
+		if err != nil {
+			// If we encountered an error, roll back the transaction
+			if txErr := tx.Rollback(); txErr != nil {
+				log.Printf("Failed to rollback transaction: %v", txErr)
+			}
+		}
+	}()
+	
 	// Update the password
 	err = h.UserStore.UpdatePassword(userID, req.Password)
 	if err != nil {
 		log.Printf("Failed to update password: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		return
+	}
+	
+	// Revoke all refresh tokens for this user to invalidate all sessions
+	revokedCount, err := h.JWTService.RevokeAllUserRefreshTokens(userID)
+	if err != nil {
+		log.Printf("Failed to revoke refresh tokens: %v", err)
+		// Continue with the password change even if token revocation fails
+	} else {
+		log.Printf("Revoked %d refresh tokens for user %s after password change", revokedCount, userID)
+	}
+	
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
 	}
 
@@ -301,33 +338,14 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		}()
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "password updated successfully",
+		"sessions_revoked": true,
+		"info": "all sessions have been logged out for security",
+	})
 }
 
-func (h *UserHandler) checkUsernameExists(username string, excludeUserID string) (bool, error) {
+// The checkUsernameExists method has been moved to the user_store as IsUsernameTaken
 
-	query := `
-		SELECT COUNT(*) 
-		FROM users 
-		WHERE username = $1 AND user_id != $2
-	`
-
-	var count int
-	err := h.UserStore.(*store.PostgresUserStore).DB().QueryRow(query, username, excludeUserID).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
-}
-
-// Helper function to update user profile in the database
-func (h *UserHandler) updateUserInDatabase(userID string, changes map[string]interface{}) (*store.User, error) {
-	// Use the UpdateUser method from the UserStore interface
-	if err := h.UserStore.UpdateUser(userID, changes); err != nil {
-		return nil, err
-	}
-
-	// Fetch and return the updated user
-	return h.UserStore.GetUserByID(userID)
-}
+// The updateUserInDatabase helper function has been removed
+// The UpdateUser method now directly returns the updated user data

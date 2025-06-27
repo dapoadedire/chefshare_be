@@ -1,7 +1,9 @@
 package services
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -91,6 +93,29 @@ func (s *JWTService) GenerateTokenPair(user *store.User, ipAddress, userAgent st
 	return accessToken, refreshToken, nil
 }
 
+// GenerateTokenPairWithTransaction creates both access and refresh tokens for a user within a transaction
+func (s *JWTService) GenerateTokenPairWithTransaction(user *store.User, ipAddress, userAgent string, tx *sql.Tx) (string, *store.RefreshToken, error) {
+	// Generate access token with short expiry
+	accessToken, err := s.GenerateAccessToken(user)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	// Store refresh token in database using the transaction
+	refreshToken, err := s.refreshTokenStore.CreateRefreshTokenWithTransaction(
+		user.UserID,
+		s.config.RefreshTokenDuration,
+		ipAddress,
+		userAgent,
+		tx,
+	)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create refresh token in transaction: %w", err)
+	}
+
+	return accessToken, refreshToken, nil
+}
+
 // GenerateAccessToken creates a new JWT access token
 func (s *JWTService) GenerateAccessToken(user *store.User) (string, error) {
 	// Set token expiry time
@@ -122,7 +147,7 @@ func (s *JWTService) GenerateAccessToken(user *store.User) (string, error) {
 	return tokenString, nil
 }
 
-// RefreshAccessToken validates a refresh token and generates a new access token
+// RefreshAccessToken validates a refresh token, generates a new access token, and rotates the refresh token
 func (s *JWTService) RefreshAccessToken(refreshTokenString string) (string, *store.RefreshToken, error) {
 	// Get refresh token from database
 	refreshToken, err := s.refreshTokenStore.GetRefreshToken(refreshTokenString)
@@ -155,13 +180,56 @@ func (s *JWTService) RefreshAccessToken(refreshTokenString string) (string, *sto
 		return "", nil, fmt.Errorf("user not found")
 	}
 
-	// Generate new access token
+	// Start a database transaction
+	db := s.userStore.DB()
+	tx, err := db.Begin()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Defer a function to handle transaction completion based on success or failure
+	defer func() {
+		if err != nil {
+			// If we encountered an error, roll back the transaction
+			if txErr := tx.Rollback(); txErr != nil {
+				log.Printf("Failed to rollback transaction: %v", txErr)
+			}
+		}
+	}()
+
+	// Revoke the current refresh token
+	err = s.refreshTokenStore.RevokeRefreshToken(refreshTokenString)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to revoke old refresh token: %w", err)
+	}
+
+	// Generate a new refresh token
+	ipAddress := refreshToken.IPAddress
+	userAgent := refreshToken.UserAgent
+	
+	// Generate new access token and refresh token
 	accessToken, err := s.GenerateAccessToken(user)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
+	
+	// Create new refresh token
+	newRefreshToken, err := s.refreshTokenStore.CreateRefreshToken(
+		user.UserID,
+		s.config.RefreshTokenDuration,
+		ipAddress,
+		userAgent,
+	)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create new refresh token: %w", err)
+	}
 
-	return accessToken, refreshToken, nil
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return "", nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return accessToken, newRefreshToken, nil
 }
 
 // ValidateAccessToken validates the provided JWT access token

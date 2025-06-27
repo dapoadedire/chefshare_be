@@ -190,8 +190,14 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 		// Continue processing as the password has already been changed
 	}
 
-	// With JWT auth, we no longer need to invalidate sessions
-	// Users will need to obtain a new token with their new password
+	// Revoke all refresh tokens for this user to invalidate all sessions
+	revokedCount, err := h.JWTService.RevokeAllUserRefreshTokens(user.UserID)
+	if err != nil {
+		log.Printf("Failed to revoke refresh tokens after password reset: %v", err)
+		// Continue with the password reset even if token revocation fails
+	} else {
+		log.Printf("Revoked %d refresh tokens for user %s after password reset", revokedCount, user.UserID)
+	}
 
 	// Send confirmation email
 	if h.EmailService != nil {
@@ -208,7 +214,11 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 		}()
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "password reset successful"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "password reset successful",
+		"sessions_revoked": true,
+		"info": "please log in with your new password",
+	})
 }
 
 // ResendOTP godoc
