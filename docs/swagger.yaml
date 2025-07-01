@@ -1,5 +1,91 @@
 basePath: /api/v1
 definitions:
+  api.CreateRecipeIngredientRequest:
+    properties:
+      image:
+        type: string
+      name:
+        type: string
+      position:
+        type: integer
+      quantity:
+        type: number
+      unit:
+        type: string
+    required:
+    - name
+    type: object
+  api.CreateRecipePhotoRequest:
+    properties:
+      is_primary:
+        type: boolean
+      photo_url:
+        type: string
+    required:
+    - photo_url
+    type: object
+  api.CreateRecipeRequest:
+    properties:
+      category_id:
+        type: integer
+      cook_time:
+        type: integer
+      description:
+        type: string
+      difficulty_level:
+        enum:
+        - easy
+        - medium
+        - hard
+        type: string
+      ingredients:
+        items:
+          $ref: '#/definitions/api.CreateRecipeIngredientRequest'
+        type: array
+      photos:
+        items:
+          $ref: '#/definitions/api.CreateRecipePhotoRequest'
+        type: array
+      prep_time:
+        type: integer
+      serving_size:
+        type: integer
+      status:
+        enum:
+        - draft
+        - published
+        type: string
+      steps:
+        items:
+          $ref: '#/definitions/api.CreateRecipeStepRequest'
+        type: array
+      tag_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      total_time:
+        type: integer
+    required:
+    - difficulty_level
+    - status
+    - title
+    type: object
+  api.CreateRecipeStepRequest:
+    properties:
+      duration_in_minutes:
+        type: integer
+      instruction:
+        type: string
+      step_number:
+        type: integer
+    required:
+    - instruction
+    - step_number
+    type: object
   api.UpdatePasswordRequest:
     properties:
       current_password:
@@ -9,6 +95,27 @@ definitions:
     required:
     - current_password
     - password
+    type: object
+  api.UpdateRecipeRequest:
+    properties:
+      category_id:
+        type: integer
+      cook_time:
+        type: integer
+      description:
+        type: string
+      difficulty_level:
+        type: string
+      prep_time:
+        type: integer
+      serving_size:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+      total_time:
+        type: integer
     type: object
   api.UpdateUserRequest:
     properties:
@@ -68,6 +175,164 @@ definitions:
       otp:
         type: string
       password:
+        type: string
+    type: object
+  store.CompleteRecipe:
+    properties:
+      ingredients:
+        items:
+          $ref: '#/definitions/store.RecipeIngredient'
+        type: array
+      photos:
+        items:
+          $ref: '#/definitions/store.RecipePhoto'
+        type: array
+      recipe:
+        $ref: '#/definitions/store.Recipe'
+      reviews:
+        items:
+          $ref: '#/definitions/store.RecipeReview'
+        type: array
+      steps:
+        items:
+          $ref: '#/definitions/store.RecipeStep'
+        type: array
+      tags:
+        items:
+          $ref: '#/definitions/store.Tag'
+        type: array
+    type: object
+  store.DifficultyLevel:
+    enum:
+    - easy
+    - medium
+    - hard
+    type: string
+    x-enum-varnames:
+    - DifficultyEasy
+    - DifficultyMedium
+    - DifficultyHard
+  store.Recipe:
+    properties:
+      category_id:
+        type: integer
+      category_name:
+        type: string
+      cook_time:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      difficulty_level:
+        $ref: '#/definitions/store.DifficultyLevel'
+      id:
+        type: integer
+      prep_time:
+        type: integer
+      published_at:
+        type: string
+      serving_size:
+        type: integer
+      status:
+        $ref: '#/definitions/store.RecipeStatus'
+      title:
+        type: string
+      total_time:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  store.RecipeIngredient:
+    properties:
+      id:
+        type: integer
+      image:
+        type: string
+      name:
+        type: string
+      position:
+        type: integer
+      quantity:
+        type: number
+      recipe_id:
+        type: integer
+      unit:
+        type: string
+    type: object
+  store.RecipeListResponse:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      recipes:
+        items:
+          $ref: '#/definitions/store.Recipe'
+        type: array
+      total_count:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  store.RecipePhoto:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_primary:
+        type: boolean
+      photo_url:
+        type: string
+      recipe_id:
+        type: integer
+    type: object
+  store.RecipeReview:
+    properties:
+      comment:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      rating:
+        type: integer
+      recipe_id:
+        type: integer
+      user_id:
+        type: integer
+    type: object
+  store.RecipeStatus:
+    enum:
+    - draft
+    - published
+    - archived
+    type: string
+    x-enum-varnames:
+    - StatusDraft
+    - StatusPublished
+    - StatusArchived
+  store.RecipeStep:
+    properties:
+      duration_in_minutes:
+        type: integer
+      id:
+        type: integer
+      instruction:
+        type: string
+      recipe_id:
+        type: integer
+      step_number:
+        type: integer
+    type: object
+  store.Tag:
+    properties:
+      id:
+        type: integer
+      name:
         type: string
     type: object
 host: localhost:8080
@@ -353,7 +618,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Validates refresh token and issues a new access token
+      description: Validates refresh token and issues a new access token with token
+        rotation
       parameters:
       - description: Refresh token
         in: body
@@ -368,7 +634,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: New access token
+          description: New access and refresh tokens
           schema:
             additionalProperties: true
             type: object
@@ -387,6 +653,300 @@ paths:
       summary: Refresh JWT access token
       tags:
       - Authentication
+  /recipes:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of recipes with filtering and sorting options
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Number of recipes per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by category name
+        in: query
+        name: category
+        type: string
+      - description: Filter by difficulty level
+        enum:
+        - easy
+        - medium
+        - hard
+        in: query
+        name: difficulty
+        type: string
+      - default: created_at
+        description: Sort field
+        enum:
+        - created_at
+        - updated_at
+        - title
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of recipes
+          schema:
+            $ref: '#/definitions/store.RecipeListResponse'
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List recipes
+      tags:
+      - Recipes
+    post:
+      consumes:
+      - application/json
+      description: Create a new recipe with ingredients, steps, and photos
+      parameters:
+      - description: Recipe creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.CreateRecipeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created recipe
+          schema:
+            $ref: '#/definitions/store.Recipe'
+        "400":
+          description: Invalid request body
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a new recipe
+      tags:
+      - Recipes
+  /recipes/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an existing recipe (owner only)
+      parameters:
+      - description: Recipe ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Recipe deleted successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid recipe ID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden - not recipe owner
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Recipe not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a recipe
+      tags:
+      - Recipes
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a specific recipe
+      parameters:
+      - description: Recipe ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Recipe details
+          schema:
+            $ref: '#/definitions/store.CompleteRecipe'
+        "400":
+          description: Invalid recipe ID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Recipe not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a recipe by ID
+      tags:
+      - Recipes
+    put:
+      consumes:
+      - application/json
+      description: Update an existing recipe (owner only)
+      parameters:
+      - description: Recipe ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Recipe update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.UpdateRecipeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated recipe
+          schema:
+            $ref: '#/definitions/store.Recipe'
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden - not recipe owner
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Recipe not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a recipe
+      tags:
+      - Recipes
+  /users/{username}/recipes:
+    get:
+      consumes:
+      - application/json
+      description: Get all published recipes by a specific user
+      parameters:
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of user's recipes
+          schema:
+            items:
+              $ref: '#/definitions/store.Recipe'
+            type: array
+        "400":
+          description: Invalid username
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get recipes by username
+      tags:
+      - Recipes
   /users/me:
     put:
       consumes:

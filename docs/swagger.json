@@ -427,7 +427,7 @@
         },
         "/auth/token/refresh": {
             "post": {
-                "description": "Validates refresh token and issues a new access token",
+                "description": "Validates refresh token and issues a new access token with token rotation",
                 "consumes": [
                     "application/json"
                 ],
@@ -456,7 +456,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "New access token",
+                        "description": "New access and refresh tokens",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -464,6 +464,398 @@
                     },
                     "401": {
                         "description": "Invalid or expired refresh token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/recipes": {
+            "get": {
+                "description": "Get a paginated list of recipes with filtering and sorting options",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "List recipes",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of recipes per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by category name",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "easy",
+                            "medium",
+                            "hard"
+                        ],
+                        "type": "string",
+                        "description": "Filter by difficulty level",
+                        "name": "difficulty",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "updated_at",
+                            "title"
+                        ],
+                        "type": "string",
+                        "default": "created_at",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sort_order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of recipes",
+                        "schema": {
+                            "$ref": "#/definitions/store.RecipeListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new recipe with ingredients, steps, and photos",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Create a new recipe",
+                "parameters": [
+                    {
+                        "description": "Recipe creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.CreateRecipeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created recipe",
+                        "schema": {
+                            "$ref": "#/definitions/store.Recipe"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/recipes/{id}": {
+            "get": {
+                "description": "Get detailed information about a specific recipe",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Get a recipe by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Recipe ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Recipe details",
+                        "schema": {
+                            "$ref": "#/definitions/store.CompleteRecipe"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid recipe ID",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Recipe not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing recipe (owner only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Update a recipe",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Recipe ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Recipe update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.UpdateRecipeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated recipe",
+                        "schema": {
+                            "$ref": "#/definitions/store.Recipe"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - not recipe owner",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Recipe not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete an existing recipe (owner only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Delete a recipe",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Recipe ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Recipe deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid recipe ID",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - not recipe owner",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Recipe not found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -645,9 +1037,189 @@
                     }
                 }
             }
+        },
+        "/users/{username}/recipes": {
+            "get": {
+                "description": "Get all published recipes by a specific user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Get recipes by username",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username",
+                        "name": "username",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of user's recipes",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Recipe"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid username",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "api.CreateRecipeIngredientRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.CreateRecipePhotoRequest": {
+            "type": "object",
+            "required": [
+                "photo_url"
+            ],
+            "properties": {
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "photo_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.CreateRecipeRequest": {
+            "type": "object",
+            "required": [
+                "difficulty_level",
+                "status",
+                "title"
+            ],
+            "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
+                "cook_time": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "difficulty_level": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "medium",
+                        "hard"
+                    ]
+                },
+                "ingredients": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/api.CreateRecipeIngredientRequest"
+                    }
+                },
+                "photos": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/api.CreateRecipePhotoRequest"
+                    }
+                },
+                "prep_time": {
+                    "type": "integer"
+                },
+                "serving_size": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "published"
+                    ]
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/api.CreateRecipeStepRequest"
+                    }
+                },
+                "tag_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "total_time": {
+                    "type": "integer"
+                }
+            }
+        },
+        "api.CreateRecipeStepRequest": {
+            "type": "object",
+            "required": [
+                "instruction",
+                "step_number"
+            ],
+            "properties": {
+                "duration_in_minutes": {
+                    "type": "integer"
+                },
+                "instruction": {
+                    "type": "string"
+                },
+                "step_number": {
+                    "type": "integer"
+                }
+            }
+        },
         "api.UpdatePasswordRequest": {
             "type": "object",
             "required": [
@@ -660,6 +1232,38 @@
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "api.UpdateRecipeRequest": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
+                "cook_time": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "difficulty_level": {
+                    "type": "string"
+                },
+                "prep_time": {
+                    "type": "integer"
+                },
+                "serving_size": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total_time": {
+                    "type": "integer"
                 }
             }
         },
@@ -752,6 +1356,243 @@
                     "type": "string"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.CompleteRecipe": {
+            "type": "object",
+            "properties": {
+                "ingredients": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.RecipeIngredient"
+                    }
+                },
+                "photos": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.RecipePhoto"
+                    }
+                },
+                "recipe": {
+                    "$ref": "#/definitions/store.Recipe"
+                },
+                "reviews": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.RecipeReview"
+                    }
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.RecipeStep"
+                    }
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.Tag"
+                    }
+                }
+            }
+        },
+        "store.DifficultyLevel": {
+            "type": "string",
+            "enum": [
+                "easy",
+                "medium",
+                "hard"
+            ],
+            "x-enum-varnames": [
+                "DifficultyEasy",
+                "DifficultyMedium",
+                "DifficultyHard"
+            ]
+        },
+        "store.Recipe": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
+                "category_name": {
+                    "type": "string"
+                },
+                "cook_time": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "difficulty_level": {
+                    "$ref": "#/definitions/store.DifficultyLevel"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "prep_time": {
+                    "type": "integer"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "serving_size": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/store.RecipeStatus"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total_time": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.RecipeIngredient": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "recipe_id": {
+                    "type": "integer"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.RecipeListResponse": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "recipes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.Recipe"
+                    }
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.RecipePhoto": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "photo_url": {
+                    "type": "string"
+                },
+                "recipe_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.RecipeReview": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "integer"
+                },
+                "recipe_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.RecipeStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "published",
+                "archived"
+            ],
+            "x-enum-varnames": [
+                "StatusDraft",
+                "StatusPublished",
+                "StatusArchived"
+            ]
+        },
+        "store.RecipeStep": {
+            "type": "object",
+            "properties": {
+                "duration_in_minutes": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "instruction": {
+                    "type": "string"
+                },
+                "recipe_id": {
+                    "type": "integer"
+                },
+                "step_number": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.Tag": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
                     "type": "string"
                 }
             }
