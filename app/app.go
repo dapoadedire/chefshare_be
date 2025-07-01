@@ -43,6 +43,7 @@ func NewApplication() (*Application, error) {
 	userStore := store.NewPostgresUserStore(pgDB)
 	passwordResetStore := store.NewPostgresPasswordResetStore(pgDB)
 	refreshTokenStore := store.NewPostgresRefreshTokenStore(pgDB)
+	emailVerificationStore := store.NewPostgresEmailVerificationStore(pgDB)
 	
 	// Initialize JWT service with default configuration
 	jwtConfig := services.DefaultJWTConfig()
@@ -53,6 +54,7 @@ func NewApplication() (*Application, error) {
 		userStore, 
 		refreshTokenStore, 
 		passwordResetStore, 
+		emailVerificationStore,
 		emailService, 
 		jwtService,
 	)
