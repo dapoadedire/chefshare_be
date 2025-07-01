@@ -18,6 +18,9 @@ import (
 const (
 	// DefaultSessionDuration is the default duration for sessions (7 days)
 	DefaultSessionDuration = 7 * 24 * time.Hour
+
+	// EmailVerificationTokenExpiry is the duration for email verification tokens (48 hours)
+	EmailVerificationTokenExpiry = 48 * time.Hour
 )
 
 type loginRequest struct {
@@ -36,26 +39,29 @@ type registeredUserRequest struct {
 }
 
 type AuthHandler struct {
-	UserStore          store.UserStore
-	RefreshTokenStore  store.RefreshTokenStore
-	PasswordResetStore store.PasswordResetStore
-	EmailService       *services.EmailService
-	JWTService         *services.JWTService
+	UserStore              store.UserStore
+	RefreshTokenStore      store.RefreshTokenStore
+	PasswordResetStore     store.PasswordResetStore
+	EmailVerificationStore store.EmailVerificationStore
+	EmailService           *services.EmailService
+	JWTService             *services.JWTService
 }
 
 func NewAuthHandler(
 	userStore store.UserStore,
 	refreshTokenStore store.RefreshTokenStore,
 	passwordResetStore store.PasswordResetStore,
+	emailVerificationStore store.EmailVerificationStore,
 	emailService *services.EmailService,
 	jwtService *services.JWTService,
 ) *AuthHandler {
 	return &AuthHandler{
-		UserStore:          userStore,
-		RefreshTokenStore:  refreshTokenStore,
-		PasswordResetStore: passwordResetStore,
-		EmailService:       emailService,
-		JWTService:         jwtService,
+		UserStore:              userStore,
+		RefreshTokenStore:      refreshTokenStore,
+		PasswordResetStore:     passwordResetStore,
+		EmailVerificationStore: emailVerificationStore,
+		EmailService:           emailService,
+		JWTService:             jwtService,
 	}
 }
 
@@ -200,20 +206,45 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	// Send welcome email async
-	if h.EmailService != nil {
+	// Generate a verification token and send verification email
+	if h.EmailVerificationStore != nil && h.EmailService != nil {
 		go func() {
+			// Create a verification token
+			token, err := h.EmailVerificationStore.CreateVerificationToken(user.UserID, EmailVerificationTokenExpiry)
+			if err != nil {
+				log.Printf("Failed to create verification token for %s: %v", user.Email, err)
+				return
+			}
+
+			// Send verification email
 			name := user.FirstName
 			if name == "" {
 				name = user.Username
 			}
-			emailID, err := h.EmailService.SendWelcomeEmail(user.Email, name)
+
+			emailID, err := h.EmailService.SendVerificationEmail(user.Email, name, token.Token)
 			if err != nil {
-				log.Printf("Failed to send welcome email to %s: %v", user.Email, err)
+				log.Printf("Failed to send verification email to %s: %v", user.Email, err)
 			} else {
-				log.Printf("Welcome email sent to %s with ID: %s", user.Email, emailID)
+				log.Printf("Verification email sent to %s with ID: %s", user.Email, emailID)
 			}
 		}()
+	} else {
+		// Fall back to welcome email if verification store is not available
+		if h.EmailService != nil {
+			go func() {
+				name := user.FirstName
+				if name == "" {
+					name = user.Username
+				}
+				emailID, err := h.EmailService.SendWelcomeEmail(user.Email, name)
+				if err != nil {
+					log.Printf("Failed to send welcome email to %s: %v", user.Email, err)
+				} else {
+					log.Printf("Welcome email sent to %s with ID: %s", user.Email, emailID)
+				}
+			}()
+		}
 	}
 
 	// Return success with tokens
@@ -231,6 +262,7 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 			"first_name":      user.FirstName,
 			"last_name":       user.LastName,
 			"profile_picture": user.ProfilePicture,
+			"email_verified":  user.EmailVerified,
 			"created_at":      user.CreatedAt,
 		},
 	})
@@ -314,6 +346,7 @@ func (h *AuthHandler) LoginUser(c *gin.Context) {
 			"first_name":      user.FirstName,
 			"last_name":       user.LastName,
 			"profile_picture": user.ProfilePicture,
+			"email_verified":  user.EmailVerified,
 			"created_at":      user.CreatedAt,
 			"last_login":      user.LastLogin,
 		},
@@ -338,12 +371,12 @@ func (h *AuthHandler) LogoutUser(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing refresh token"})
 		return
 	}
-	
+
 	refreshTokenString := req.RefreshToken
 	if refreshTokenString == "" {
 		c.JSON(http.StatusOK, gin.H{"message": "no active session"})
@@ -375,12 +408,12 @@ func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
 		return
 	}
-	
+
 	refreshTokenString := req.RefreshToken
 	if refreshTokenString == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
@@ -444,6 +477,7 @@ func (h *AuthHandler) GetAuthenticatedUser(c *gin.Context) {
 			"user_id":         user.UserID,
 			"username":        user.Username,
 			"email":           user.Email, // Email is kept as the user is viewing their own profile
+			"email_verified":  user.EmailVerified,
 			"bio":             user.Bio,
 			"first_name":      user.FirstName,
 			"last_name":       user.LastName,

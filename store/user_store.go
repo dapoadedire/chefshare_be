@@ -22,6 +22,7 @@ type User struct {
 	LastName       string   `json:"last_name"`
 	ProfilePicture string   `json:"profile_picture"`
 	LastLogin      *string  `json:"last_login"`
+	EmailVerified  bool     `json:"email_verified"`
 	CreatedAt      string   `json:"created_at"`
 	UpdatedAt      string   `json:"updated_at"`
 }
@@ -73,7 +74,7 @@ func (s *PostgresUserStore) CreateUserWithTransaction(user *User, tx *sql.Tx) er
 func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 	query := `
 		SELECT user_id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
-		       last_login, created_at, updated_at
+		       last_login, email_verified, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -91,6 +92,7 @@ func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 		&user.LastName,
 		&user.ProfilePicture,
 		&user.LastLogin,
+		&user.EmailVerified,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -109,7 +111,7 @@ func (s *PostgresUserStore) GetUserByEmail(email string) (*User, error) {
 func (s *PostgresUserStore) GetUserByID(userID string) (*User, error) {
 	query := `
 		SELECT user_id, username, email, password_hash, bio, first_name, last_name, profile_picture, 
-		       last_login, created_at, updated_at
+		       last_login, email_verified, created_at, updated_at
 		FROM users
 		WHERE user_id = $1
 	`
@@ -127,6 +129,7 @@ func (s *PostgresUserStore) GetUserByID(userID string) (*User, error) {
 		&user.LastName,
 		&user.ProfilePicture,
 		&user.LastLogin,
+		&user.EmailVerified,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -151,6 +154,7 @@ type UserStore interface {
 	UpdateUser(userID string, updates map[string]interface{}) (*User, error)
 	UpdateLastLogin(userID string) error
 	IsUsernameTaken(username string, excludeUserID string) (bool, error)
+	SetEmailVerified(userID string, verified bool) error
 	DB() *sql.DB
 }
 
@@ -271,4 +275,20 @@ func (s *PostgresUserStore) IsUsernameTaken(username string, excludeUserID strin
 	}
 
 	return count > 0, nil
+}
+
+// SetEmailVerified updates the email_verified status for a user
+func (s *PostgresUserStore) SetEmailVerified(userID string, verified bool) error {
+	query := `
+		UPDATE users 
+		SET email_verified = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = $2
+	`
+
+	_, err := s.db.Exec(query, verified, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update email verification status: %w", err)
+	}
+
+	return nil
 }
