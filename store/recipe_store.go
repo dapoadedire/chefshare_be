@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -91,12 +92,34 @@ type CompleteRecipe struct {
 	Reviews     []*RecipeReview     `json:"reviews"`
 }
 
+type RecipeListOptions struct {
+	Page         int    `json:"page"`
+	Limit        int    `json:"limit"`
+	Category     string `json:"category,omitempty"`
+	Difficulty   string `json:"difficulty,omitempty"`
+	SortBy       string `json:"sort_by,omitempty"` // created_at, updated_at, title
+	SortOrder    string `json:"sort_order,omitempty"` // asc, desc
+	Status       string `json:"status,omitempty"`
+	UserID       *int64 `json:"user_id,omitempty"`
+	Username     string `json:"username,omitempty"`
+}
+
+type RecipeListResponse struct {
+	Recipes    []*Recipe `json:"recipes"`
+	TotalCount int64     `json:"total_count"`
+	Page       int       `json:"page"`
+	Limit      int       `json:"limit"`
+	TotalPages int       `json:"total_pages"`
+}
+
 type RecipeStore interface {
 	GetCompleteRecipe(id int64) (*CompleteRecipe, error)
+	GetRecipes(options *RecipeListOptions) (*RecipeListResponse, error)
 
 	CreateRecipe(recipe *Recipe) error
 	GetRecipeByID(id int64) (*Recipe, error)
 	GetRecipesByUserID(userID int64) ([]*Recipe, error)
+	GetRecipesByUsername(username string) ([]*Recipe, error)
 	UpdateRecipe(recipe *Recipe) error
 	DeleteRecipe(id int64) error
 
@@ -342,6 +365,222 @@ func (s *PostgresRecipeStore) GetRecipesByUserID(userID int64) ([]*Recipe, error
 			&recipe.PrepTime,
 			&recipe.CookTime,
 			&recipe.TotalTime,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan recipe: %w", err)
+		}
+
+		recipes = append(recipes, recipe)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over recipes: %w", err)
+	}
+
+	return recipes, nil
+}
+
+func (s *PostgresRecipeStore) GetRecipes(options *RecipeListOptions) (*RecipeListResponse, error) {
+	// Set defaults
+	if options.Page <= 0 {
+		options.Page = 1
+	}
+	if options.Limit <= 0 || options.Limit > 50 {
+		options.Limit = 10
+	}
+	if options.SortBy == "" {
+		options.SortBy = "created_at"
+	}
+	if options.SortOrder == "" {
+		options.SortOrder = "desc"
+	}
+
+	// Build WHERE clause
+	var whereConditions []string
+	var args []interface{}
+	argIndex := 1
+
+	if options.Category != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("c.name = $%d", argIndex))
+		args = append(args, options.Category)
+		argIndex++
+	}
+
+	if options.Difficulty != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("r.difficulty_level = $%d", argIndex))
+		args = append(args, options.Difficulty)
+		argIndex++
+	}
+
+	if options.Status != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("r.status = $%d", argIndex))
+		args = append(args, options.Status)
+		argIndex++
+	} else {
+		// Default to published recipes only for public listing
+		whereConditions = append(whereConditions, fmt.Sprintf("r.status = $%d", argIndex))
+		args = append(args, "published")
+		argIndex++
+	}
+
+	if options.UserID != nil {
+		whereConditions = append(whereConditions, fmt.Sprintf("r.user_id = $%d", argIndex))
+		args = append(args, *options.UserID)
+		argIndex++
+	}
+
+	if options.Username != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("u.username = $%d", argIndex))
+		args = append(args, options.Username)
+		argIndex++
+	}
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	// Validate sort fields
+	validSortFields := map[string]bool{
+		"created_at": true,
+		"updated_at": true,
+		"title":      true,
+	}
+	if !validSortFields[options.SortBy] {
+		options.SortBy = "created_at"
+	}
+
+	validSortOrders := map[string]bool{
+		"asc":  true,
+		"desc": true,
+	}
+	if !validSortOrders[options.SortOrder] {
+		options.SortOrder = "desc"
+	}
+
+	// Count total recipes
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM recipes r
+		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN users u ON r.user_id = u.id
+		%s
+	`, whereClause)
+
+	var totalCount int64
+	err := s.db.QueryRow(countQuery, args...).Scan(&totalCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count recipes: %w", err)
+	}
+
+	// Calculate pagination
+	offset := (options.Page - 1) * options.Limit
+	totalPages := int((totalCount + int64(options.Limit) - 1) / int64(options.Limit))
+
+	// Get recipes
+	query := fmt.Sprintf(`
+		SELECT 
+			r.id, r.title, r.description, r.user_id, r.category_id,
+			r.created_at, r.updated_at, r.published_at, r.status, 
+			r.difficulty_level, r.serving_size, r.prep_time, r.cook_time, r.total_time,
+			c.name as category_name
+		FROM recipes r
+		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN users u ON r.user_id = u.id
+		%s
+		ORDER BY r.%s %s
+		LIMIT $%d OFFSET $%d
+	`, whereClause, options.SortBy, options.SortOrder, argIndex, argIndex+1)
+
+	args = append(args, options.Limit, offset)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recipes: %w", err)
+	}
+	defer rows.Close()
+
+	var recipes []*Recipe
+	for rows.Next() {
+		recipe := &Recipe{}
+		err := rows.Scan(
+			&recipe.ID,
+			&recipe.Title,
+			&recipe.Description,
+			&recipe.UserID,
+			&recipe.CategoryID,
+			&recipe.CreatedAt,
+			&recipe.UpdatedAt,
+			&recipe.PublishedAt,
+			&recipe.Status,
+			&recipe.DifficultyLevel,
+			&recipe.ServingSize,
+			&recipe.PrepTime,
+			&recipe.CookTime,
+			&recipe.TotalTime,
+			&recipe.CategoryName,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan recipe: %w", err)
+		}
+
+		recipes = append(recipes, recipe)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over recipes: %w", err)
+	}
+
+	return &RecipeListResponse{
+		Recipes:    recipes,
+		TotalCount: totalCount,
+		Page:       options.Page,
+		Limit:      options.Limit,
+		TotalPages: totalPages,
+	}, nil
+}
+
+func (s *PostgresRecipeStore) GetRecipesByUsername(username string) ([]*Recipe, error) {
+	query := `
+		SELECT 
+			r.id, r.title, r.description, r.user_id, r.category_id,
+			r.created_at, r.updated_at, r.published_at, r.status, 
+			r.difficulty_level, r.serving_size, r.prep_time, r.cook_time, r.total_time,
+			c.name as category_name
+		FROM recipes r
+		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN users u ON r.user_id = u.id
+		WHERE u.username = $1 AND r.status = 'published'
+		ORDER BY r.created_at DESC
+	`
+
+	rows, err := s.db.Query(query, username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recipes by username: %w", err)
+	}
+	defer rows.Close()
+
+	var recipes []*Recipe
+	for rows.Next() {
+		recipe := &Recipe{}
+		err := rows.Scan(
+			&recipe.ID,
+			&recipe.Title,
+			&recipe.Description,
+			&recipe.UserID,
+			&recipe.CategoryID,
+			&recipe.CreatedAt,
+			&recipe.UpdatedAt,
+			&recipe.PublishedAt,
+			&recipe.Status,
+			&recipe.DifficultyLevel,
+			&recipe.ServingSize,
+			&recipe.PrepTime,
+			&recipe.CookTime,
+			&recipe.TotalTime,
+			&recipe.CategoryName,
 		)
 
 		if err != nil {

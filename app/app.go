@@ -14,8 +14,10 @@ type Application struct {
 	DB                 *sql.DB
 	AuthHandler        *api.AuthHandler
 	UserHandler        *api.UserHandler
+	RecipeHandler      *api.RecipeHandler
 	EmailService       *services.EmailService
 	UserStore          store.UserStore
+	RecipeStore        store.RecipeStore
 	PasswordResetStore store.PasswordResetStore
 	RefreshTokenStore  store.RefreshTokenStore
 	JWTService         *services.JWTService
@@ -41,6 +43,7 @@ func NewApplication() (*Application, error) {
 	}
 
 	userStore := store.NewPostgresUserStore(pgDB)
+	recipeStore := store.NewPostgresRecipeStore(pgDB)
 	passwordResetStore := store.NewPostgresPasswordResetStore(pgDB)
 	refreshTokenStore := store.NewPostgresRefreshTokenStore(pgDB)
 	
@@ -57,13 +60,16 @@ func NewApplication() (*Application, error) {
 		jwtService,
 	)
 	userHandler := api.NewUserHandler(userStore, emailService, jwtService)
+	recipeHandler := api.NewRecipeHandler(recipeStore, userStore)
 
 	app := &Application{
 		DB:                 pgDB,
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
+		RecipeHandler:      recipeHandler,
 		EmailService:       emailService,
 		UserStore:          userStore,
+		RecipeStore:        recipeStore,
 		PasswordResetStore: passwordResetStore,
 		RefreshTokenStore:  refreshTokenStore,
 		JWTService:         jwtService,

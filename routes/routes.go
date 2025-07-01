@@ -75,6 +75,25 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 			users.PUT("/me", app.UserHandler.UpdateUser)
 			users.PUT("/me/password", app.UserHandler.UpdatePassword)
 		}
+
+		// Public recipe routes
+		recipes := v1.Group("/recipes")
+		{
+			recipes.GET("", app.RecipeHandler.GetRecipes)
+			recipes.GET("/:id", app.RecipeHandler.GetRecipe)
+		}
+
+		// Protected recipe routes
+		recipesProtected := v1.Group("/recipes")
+		recipesProtected.Use(middleware.JWTAuthMiddleware(app.JWTService))
+		{
+			recipesProtected.POST("", app.RecipeHandler.CreateRecipe)
+			recipesProtected.PUT("/:id", app.RecipeHandler.UpdateRecipe)
+			recipesProtected.DELETE("/:id", app.RecipeHandler.DeleteRecipe)
+		}
+
+		// User recipes route (public)
+		v1.GET("/users/:username/recipes", app.RecipeHandler.GetUserRecipes)
 	}
 
 	return router
