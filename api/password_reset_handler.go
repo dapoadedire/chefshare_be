@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dapoadedire/chefshare_be/middleware"
 	"github.com/dapoadedire/chefshare_be/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -54,6 +55,15 @@ func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	// Validate email format
 	if !utils.IsValidEmail(req.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email format"})
+		return
+	}
+
+	// Apply email-based rate limiting
+	if !middleware.TrackEmailRateLimiting(req.Email) {
+		// Return a generic message to prevent email enumeration
+		c.JSON(http.StatusOK, gin.H{
+			"message": "if your email is registered, we've sent a password reset code",
+		})
 		return
 	}
 
@@ -148,6 +158,15 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 		return
 	}
 
+	// Apply email-based rate limiting
+	if !middleware.TrackEmailRateLimiting(req.Email) {
+		// For confirm endpoint, we'll return an error to prevent brute-force OTP guessing
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error": "too many password reset attempts, please try again later",
+		})
+		return
+	}
+
 	// Get user by email
 	user, err := h.UserStore.GetUserByEmail(req.Email)
 	if err != nil {
@@ -175,19 +194,12 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 		return
 	}
 
-	// Update user's password
-	err = h.UserStore.UpdatePassword(user.UserID, req.Password)
+	// Use transaction to update password and mark token as used atomically
+	err = h.PasswordResetStore.ResetPasswordTransaction(token.ID, user.UserID, req.Password)
 	if err != nil {
-		log.Printf("Error updating password: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		log.Printf("Error in password reset transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to complete password reset"})
 		return
-	}
-
-	// Mark token as used
-	err = h.PasswordResetStore.MarkTokenAsUsed(token.ID)
-	if err != nil {
-		log.Printf("Error marking token as used: %v", err)
-		// Continue processing as the password has already been changed
 	}
 
 	// Revoke all refresh tokens for this user to invalidate all sessions
@@ -215,9 +227,9 @@ func (h *AuthHandler) VerifyOTPAndResetPassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "password reset successful",
+		"message":          "password reset successful",
 		"sessions_revoked": true,
-		"info": "please log in with your new password",
+		"info":             "please log in with your new password",
 	})
 }
 
@@ -246,6 +258,15 @@ func (h *AuthHandler) ResendOTP(c *gin.Context) {
 	// Validate email format
 	if !utils.IsValidEmail(req.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email format"})
+		return
+	}
+
+	// Apply email-based rate limiting
+	if !middleware.TrackEmailRateLimiting(req.Email) {
+		// Return a generic message to prevent email enumeration
+		c.JSON(http.StatusOK, gin.H{
+			"message": "if your email is registered, we've sent a new password reset code",
+		})
 		return
 	}
 

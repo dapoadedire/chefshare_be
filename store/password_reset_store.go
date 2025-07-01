@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type PasswordResetToken struct {
@@ -22,6 +24,8 @@ type PasswordResetStore interface {
 	MarkTokenAsUsed(tokenID int64) error
 	DeleteExpiredTokens() (int64, error)
 	DeleteUserTokens(userID string) (int64, error)
+	// New method for transactional password reset
+	ResetPasswordTransaction(tokenID int64, userID string, newPassword string) error
 }
 
 type PostgresPasswordResetStore struct {
@@ -153,4 +157,55 @@ func (s *PostgresPasswordResetStore) DeleteUserTokens(userID string) (int64, err
 	}
 
 	return rowsAffected, nil
+}
+
+// ResetPasswordTransaction performs password reset in a single transaction
+// This ensures atomicity between password update and marking the token as used
+func (s *PostgresPasswordResetStore) ResetPasswordTransaction(tokenID int64, userID string, newPassword string) error {
+	// Hash the password first
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Start a transaction
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Use defer with a closure to handle rollback if needed
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Just log the rollback error
+				fmt.Printf("Error rolling back transaction: %v\n", rbErr)
+			}
+		}
+	}()
+
+	// 1. Update the user's password within the transaction
+	_, err = tx.Exec(`
+		UPDATE users 
+		SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = $2
+	`, hashedPassword, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update password in transaction: %w", err)
+	}
+
+	// 2. Mark the token as used within the same transaction
+	_, err = tx.Exec(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to mark token as used in transaction: %w", err)
+	}
+
+	// 3. Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	committed = true
+	return nil
 }

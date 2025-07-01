@@ -32,18 +32,34 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 	{
 		// Health check endpoint
 		// @Summary Health check endpoint
-		// @Description Returns the API's health status
+		// @Description Returns the API's health status including database connectivity
 		// @Tags Health
 		// @Produce json
 		// @Success 200 {object} map[string]interface{} "API is healthy"
 		// @Router /api/v1/health [get]
 		v1.GET("/health", func(c *gin.Context) {
+			// Check database connection status
+			dbStatus := "ok"
+			dbMessage := ""
+
+			// Ping database with a simple query
+			var result int
+			err := app.UserStore.DB().QueryRow("SELECT 1").Scan(&result)
+			if err != nil {
+				dbStatus = "error"
+				dbMessage = err.Error()
+			}
 			c.JSON(200, gin.H{
 				"status":    "ok",
 				"timestamp": time.Now().Format(time.RFC3339),
+				"dependencies": gin.H{
+					"database": gin.H{
+						"status":  dbStatus,
+						"message": dbMessage,
+					},
+				},
 			})
 		})
-
 		// Public auth routes
 		auth := v1.Group("/auth")
 		{
@@ -51,8 +67,9 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 			auth.POST("/login", app.AuthHandler.LoginUser)
 			auth.POST("/token/refresh", app.AuthHandler.RefreshAccessToken)
 
-			// Password reset flow
+			// Password reset flow with rate limiting
 			password := auth.Group("/password/reset")
+			password.Use(middleware.PasswordResetRateLimitMiddleware())
 			{
 				password.POST("/request", app.AuthHandler.RequestPasswordReset)
 				password.POST("/confirm", app.AuthHandler.VerifyOTPAndResetPassword)
