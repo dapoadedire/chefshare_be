@@ -229,22 +229,22 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 				log.Printf("Verification email sent to %s with ID: %s", user.Email, emailID)
 			}
 		}()
-	} else {
-		// Fall back to welcome email if verification store is not available
-		if h.EmailService != nil {
-			go func() {
-				name := user.FirstName
-				if name == "" {
-					name = user.Username
-				}
-				emailID, err := h.EmailService.SendWelcomeEmail(user.Email, name)
-				if err != nil {
-					log.Printf("Failed to send welcome email to %s: %v", user.Email, err)
-				} else {
-					log.Printf("Welcome email sent to %s with ID: %s", user.Email, emailID)
-				}
-			}()
-		}
+	}
+
+	// Fall back to welcome email if verification store is not available
+	if h.EmailService != nil {
+		go func() {
+			name := user.FirstName
+			if name == "" {
+				name = user.Username
+			}
+			emailID, err := h.EmailService.SendWelcomeEmail(user.Email, name)
+			if err != nil {
+				log.Printf("Failed to send welcome email to %s: %v", user.Email, err)
+			} else {
+				log.Printf("Welcome email sent to %s with ID: %s", user.Email, emailID)
+			}
+		}()
 	}
 
 	// Return success with tokens
