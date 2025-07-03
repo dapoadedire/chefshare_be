@@ -1,7 +1,5 @@
 -- +goose Up
 -- +goose StatementBegin
--- Add email_verified column to users table
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;
 
 -- Create email_verification_tokens table
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
@@ -25,6 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verifi
 -- Drop the email_verification_tokens table
 DROP TABLE IF EXISTS email_verification_tokens;
 
--- Remove email_verified column from users table
-ALTER TABLE users DROP COLUMN IF EXISTS email_verified;
 -- +goose StatementEnd
