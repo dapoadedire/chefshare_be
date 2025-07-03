@@ -11,14 +11,15 @@ import (
 )
 
 type Application struct {
-	DB                 *sql.DB
-	AuthHandler        *api.AuthHandler
-	UserHandler        *api.UserHandler
-	EmailService       *services.EmailService
-	UserStore          store.UserStore
-	PasswordResetStore store.PasswordResetStore
-	RefreshTokenStore  store.RefreshTokenStore
-	JWTService         *services.JWTService
+	DB                  *sql.DB
+	AuthHandler         *api.AuthHandler
+	UserHandler         *api.UserHandler
+	EmailService        *services.EmailService
+	UserStore           store.UserStore
+	PasswordResetStore  store.PasswordResetStore
+	RefreshTokenStore   store.RefreshTokenStore
+	TokenBlacklistStore store.TokenBlacklistStore
+	JWTService          *services.JWTService
 }
 
 func NewApplication() (*Application, error) {
@@ -44,31 +45,33 @@ func NewApplication() (*Application, error) {
 	passwordResetStore := store.NewPostgresPasswordResetStore(pgDB)
 	refreshTokenStore := store.NewPostgresRefreshTokenStore(pgDB)
 	emailVerificationStore := store.NewPostgresEmailVerificationStore(pgDB)
-	
+	tokenBlacklistStore := store.NewPostgresTokenBlacklistStore(pgDB)
+
 	// Initialize JWT service with default configuration
 	jwtConfig := services.DefaultJWTConfig()
-	jwtService := services.NewJWTService(jwtConfig, refreshTokenStore, userStore)
+	jwtService := services.NewJWTService(jwtConfig, refreshTokenStore, userStore, tokenBlacklistStore)
 
 	// This will be fully removed in a future update
 	authHandler := api.NewAuthHandler(
-		userStore, 
-		refreshTokenStore, 
-		passwordResetStore, 
+		userStore,
+		refreshTokenStore,
+		passwordResetStore,
 		emailVerificationStore,
-		emailService, 
+		emailService,
 		jwtService,
 	)
 	userHandler := api.NewUserHandler(userStore, emailService, jwtService)
 
 	app := &Application{
-		DB:                 pgDB,
-		AuthHandler:        authHandler,
-		UserHandler:        userHandler,
-		EmailService:       emailService,
-		UserStore:          userStore,
-		PasswordResetStore: passwordResetStore,
-		RefreshTokenStore:  refreshTokenStore,
-		JWTService:         jwtService,
+		DB:                  pgDB,
+		AuthHandler:         authHandler,
+		UserHandler:         userHandler,
+		EmailService:        emailService,
+		UserStore:           userStore,
+		PasswordResetStore:  passwordResetStore,
+		RefreshTokenStore:   refreshTokenStore,
+		TokenBlacklistStore: tokenBlacklistStore,
+		JWTService:          jwtService,
 	}
 
 	return app, nil

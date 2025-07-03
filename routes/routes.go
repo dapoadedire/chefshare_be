@@ -11,6 +11,7 @@ import (
 func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 	// Middleware for periodic cleanups
 	router.Use(middleware.PasswordResetCleanupMiddleware(app.PasswordResetStore, 1*time.Hour))
+	router.Use(middleware.TokenBlacklistCleanupMiddleware(app.TokenBlacklistStore, 1*time.Hour))
 	setupRefreshTokenCleanup(router, app)
 
 	// Root welcome route

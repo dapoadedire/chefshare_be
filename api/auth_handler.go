@@ -370,6 +370,7 @@ func (h *AuthHandler) LogoutUser(c *gin.Context) {
 	// Get refresh token from request body
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
+		AccessToken  string `json:"access_token"` // Optional, but helps with explicit blacklisting
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -387,6 +388,27 @@ func (h *AuthHandler) LogoutUser(c *gin.Context) {
 	err := h.JWTService.RevokeRefreshToken(refreshTokenString)
 	if err != nil {
 		log.Printf("Failed to revoke refresh token: %v", err)
+	}
+
+	// Also blacklist the access token if provided
+	if req.AccessToken != "" {
+		err := h.JWTService.BlacklistAccessToken(req.AccessToken)
+		if err != nil {
+			log.Printf("Failed to blacklist access token: %v", err)
+		}
+	}
+
+	// Also blacklist the access token from the Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && parts[0] == "Bearer" {
+			accessToken := parts[1]
+			err := h.JWTService.BlacklistAccessToken(accessToken)
+			if err != nil {
+				log.Printf("Failed to blacklist access token from header: %v", err)
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})

@@ -63,9 +63,9 @@ func (s *PostgresRefreshTokenStore) CreateRefreshToken(userID string, duration t
 	`
 
 	err := s.db.QueryRow(
-		query, 
-		refreshToken.Token, 
-		refreshToken.UserID, 
+		query,
+		refreshToken.Token,
+		refreshToken.UserID,
 		refreshToken.ExpiresAt,
 		refreshToken.IPAddress,
 		refreshToken.UserAgent,
@@ -99,9 +99,9 @@ func (s *PostgresRefreshTokenStore) CreateRefreshTokenWithTransaction(userID str
 	`
 
 	err := tx.QueryRow(
-		query, 
-		refreshToken.Token, 
-		refreshToken.UserID, 
+		query,
+		refreshToken.Token,
+		refreshToken.UserID,
 		refreshToken.ExpiresAt,
 		refreshToken.IPAddress,
 		refreshToken.UserAgent,
@@ -119,11 +119,11 @@ func (s *PostgresRefreshTokenStore) GetRefreshToken(token string) (*RefreshToken
 	query := `
 		SELECT id, token, user_id, expires_at, revoked, issued_at, ip_address, user_agent
 		FROM refresh_tokens
-		WHERE token = $1
+		WHERE token = $1 AND expires_at > $2
 	`
 
 	refreshToken := &RefreshToken{}
-	err := s.db.QueryRow(query, token).Scan(
+	err := s.db.QueryRow(query, token, time.Now()).Scan(
 		&refreshToken.ID,
 		&refreshToken.Token,
 		&refreshToken.UserID,
@@ -136,25 +136,29 @@ func (s *PostgresRefreshTokenStore) GetRefreshToken(token string) (*RefreshToken
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // Token not found
+			return nil, nil // Token not found or expired
 		}
 		return nil, fmt.Errorf("failed to get refresh token: %w", err)
+	}
+
+	// Additional check for already revoked tokens (should be caught by DELETE approach now)
+	if refreshToken.Revoked {
+		return nil, fmt.Errorf("token has been revoked")
 	}
 
 	return refreshToken, nil
 }
 
-// RevokeRefreshToken marks a refresh token as revoked
+// RevokeRefreshToken deletes a refresh token from the database
 func (s *PostgresRefreshTokenStore) RevokeRefreshToken(token string) error {
 	query := `
-		UPDATE refresh_tokens
-		SET revoked = true
+		DELETE FROM refresh_tokens
 		WHERE token = $1
 	`
 
 	result, err := s.db.Exec(query, token)
 	if err != nil {
-		return fmt.Errorf("failed to revoke refresh token: %w", err)
+		return fmt.Errorf("failed to delete refresh token: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -169,17 +173,16 @@ func (s *PostgresRefreshTokenStore) RevokeRefreshToken(token string) error {
 	return nil
 }
 
-// RevokeAllUserRefreshTokens revokes all refresh tokens for a specific user
+// RevokeAllUserRefreshTokens deletes all refresh tokens for a specific user
 func (s *PostgresRefreshTokenStore) RevokeAllUserRefreshTokens(userID string) (int64, error) {
 	query := `
-		UPDATE refresh_tokens
-		SET revoked = true
-		WHERE user_id = $1 AND revoked = false
+		DELETE FROM refresh_tokens
+		WHERE user_id = $1
 	`
 
 	result, err := s.db.Exec(query, userID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to revoke user refresh tokens: %w", err)
+		return 0, fmt.Errorf("failed to delete user refresh tokens: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()

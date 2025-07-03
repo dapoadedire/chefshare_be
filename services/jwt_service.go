@@ -52,9 +52,10 @@ type CustomClaims struct {
 
 // JWTService handles JWT token generation and validation
 type JWTService struct {
-	config            JWTConfig
-	refreshTokenStore store.RefreshTokenStore
-	userStore         store.UserStore
+	config              JWTConfig
+	refreshTokenStore   store.RefreshTokenStore
+	tokenBlacklistStore store.TokenBlacklistStore
+	userStore           store.UserStore
 }
 
 // GetConfig returns the JWTService configuration
@@ -63,11 +64,12 @@ func (s *JWTService) GetConfig() JWTConfig {
 }
 
 // NewJWTService creates a new JWT service with the given configuration
-func NewJWTService(config JWTConfig, refreshTokenStore store.RefreshTokenStore, userStore store.UserStore) *JWTService {
+func NewJWTService(config JWTConfig, refreshTokenStore store.RefreshTokenStore, userStore store.UserStore, tokenBlacklistStore store.TokenBlacklistStore) *JWTService {
 	return &JWTService{
-		config:            config,
-		refreshTokenStore: refreshTokenStore,
-		userStore:         userStore,
+		config:              config,
+		refreshTokenStore:   refreshTokenStore,
+		userStore:           userStore,
+		tokenBlacklistStore: tokenBlacklistStore,
 	}
 }
 
@@ -160,15 +162,7 @@ func (s *JWTService) RefreshAccessToken(refreshTokenString string) (string, *sto
 		return "", nil, fmt.Errorf("invalid refresh token")
 	}
 
-	// Check if token is revoked
-	if refreshToken.Revoked {
-		return "", nil, fmt.Errorf("refresh token has been revoked")
-	}
-
-	// Check if token is expired
-	if refreshToken.ExpiresAt.Before(time.Now()) {
-		return "", nil, fmt.Errorf("refresh token has expired")
-	}
+	// Note: Token expiration check is now done in the GetRefreshToken method via SQL query
 
 	// Get user from the database using the UserStore
 	user, err := s.userStore.GetUserByID(refreshToken.UserID)
@@ -206,13 +200,13 @@ func (s *JWTService) RefreshAccessToken(refreshTokenString string) (string, *sto
 	// Generate a new refresh token
 	ipAddress := refreshToken.IPAddress
 	userAgent := refreshToken.UserAgent
-	
+
 	// Generate new access token and refresh token
 	accessToken, err := s.GenerateAccessToken(user)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
-	
+
 	// Create new refresh token
 	newRefreshToken, err := s.refreshTokenStore.CreateRefreshToken(
 		user.UserID,
@@ -234,6 +228,17 @@ func (s *JWTService) RefreshAccessToken(refreshTokenString string) (string, *sto
 
 // ValidateAccessToken validates the provided JWT access token
 func (s *JWTService) ValidateAccessToken(tokenString string) (*CustomClaims, error) {
+	// First, check if token is blacklisted
+	isBlacklisted, err := s.tokenBlacklistStore.IsBlacklisted(tokenString)
+	if err != nil {
+		// Log error but continue validation
+		log.Printf("Error checking token blacklist: %v", err)
+	}
+
+	if isBlacklisted {
+		return nil, fmt.Errorf("token is revoked")
+	}
+
 	// Parse the token
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Validate the signing method
@@ -269,4 +274,27 @@ func (s *JWTService) RevokeRefreshToken(tokenString string) error {
 // RevokeAllUserRefreshTokens revokes all refresh tokens for a specific user
 func (s *JWTService) RevokeAllUserRefreshTokens(userID string) (int64, error) {
 	return s.refreshTokenStore.RevokeAllUserRefreshTokens(userID)
+}
+
+// BlacklistAccessToken adds an access token to the blacklist
+func (s *JWTService) BlacklistAccessToken(tokenString string) error {
+	// Parse the token to get the expiry time
+	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.config.AccessTokenSecret), nil
+	})
+
+	var expiresAt time.Time
+
+	// Even if token is invalid, we'll blacklist it anyway with a reasonable expiry
+	if err == nil && token.Valid {
+		if claims, ok := token.Claims.(*CustomClaims); ok {
+			expiresAt = claims.ExpiresAt.Time
+		}
+	} else {
+		// If we can't parse the token, blacklist it with a default expiry of 24 hours
+		expiresAt = time.Now().Add(24 * time.Hour)
+	}
+
+	// Add token to blacklist
+	return s.tokenBlacklistStore.BlacklistToken(tokenString, expiresAt)
 }
