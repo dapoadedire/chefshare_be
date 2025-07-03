@@ -27,7 +27,6 @@ func NewUserHandler(userStore store.UserStore, emailService *services.EmailServi
 }
 
 type UpdateUserRequest struct {
-	CurrentPassword string  `json:"current_password" binding:"required"`
 	Username        *string `json:"username,omitempty"`
 	FirstName       *string `json:"first_name,omitempty"`
 	LastName        *string `json:"last_name,omitempty"`
@@ -55,7 +54,7 @@ type UpdatePasswordRequest struct {
 // @Failure 409 {object} map[string]string "Username already exists"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /users/me [put]
-// Requires authentication and password verification
+// Requires authentication 
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Get user ID from context (added by AuthMiddleware)
 	userIDValue, exists := c.Get("user_id")
@@ -90,11 +89,6 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Verify current password
-	if err := user.PasswordHash.CheckPassword(req.CurrentPassword); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
-		return
-	}
 
 	// Validate and prepare updates
 	changes := make(map[string]interface{})
