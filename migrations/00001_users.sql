@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users(
     user_id VARCHAR(50) UNIQUE NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    email_verified BOOLEAN DEFAULT false,
     password_hash VARCHAR(255) NOT NULL,
     bio TEXT,
     first_name VARCHAR(100),
