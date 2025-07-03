@@ -1,9 +1,10 @@
 package store
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -38,15 +39,13 @@ func NewPostgresPasswordResetStore(db *sql.DB) *PostgresPasswordResetStore {
 	}
 }
 
-// GenerateOTP generates a 6-digit OTP
-func generateOTP() string {
-	// Set up a random number generator with the current time as seed
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	// Generate a random 6-digit number
-	otp := r.Intn(900000) + 100000 // This ensures a 6-digit number (100000 to 999999)
-
-	return fmt.Sprintf("%06d", otp)
+// generateOTP generates a secure 6-digit OTP
+func generateOTP() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(900000)) // range: 0–899999
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()+100000), nil
 }
 
 // CreatePasswordResetToken creates a new password reset token for the given user
@@ -58,7 +57,10 @@ func (s *PostgresPasswordResetStore) CreatePasswordResetToken(userID string, exp
 	}
 
 	// Generate a new OTP
-	token := generateOTP()
+	token, err := generateOTP()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate OTP: %w", err)
+	}
 	expiresAt := time.Now().Add(expiryDuration)
 
 	passwordResetToken := &PasswordResetToken{

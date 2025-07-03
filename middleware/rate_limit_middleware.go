@@ -92,8 +92,8 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 // Global rate limiters for password reset endpoints
 var (
-	// IP-based limiter: 5 requests per IP per 15 minutes
-	ipLimiter = NewRateLimiter(15*time.Minute, 5)
+	// IP-based limiter: 5 requests per IP per 10 minutes
+	ipLimiter = NewRateLimiter(10*time.Minute, 5)
 
 	// Email-based limiter: 3 requests per email per hour
 	emailLimiter = NewRateLimiter(60*time.Minute, 3)
@@ -109,7 +109,7 @@ func PasswordResetRateLimitMiddleware() gin.HandlerFunc {
 		if !ipLimiter.Allow(clientIP) {
 			// Return a 429 Too Many Requests response
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"message": "too many password reset attempts, please try again later",
+				"error": "too many password reset attempts, please try again later",
 			})
 			c.Abort()
 			return
