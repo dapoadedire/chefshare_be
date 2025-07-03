@@ -101,7 +101,7 @@ func (s *EmailService) SendWelcomeEmail(email string, name string) (string, erro
 			<p>Thanks for signing up. Chefshare is your space to create, manage, and explore recipes shared by cooks like you.</p>
 			<p>You can start by uploading your first recipe or discovering what others are cooking.</p>
 			<div class="cta">
-				<a href="https://chefshare.app/dashboard">Go to Dashboard</a>
+				<a href="https://chefshare-2025.vercel.app/profile">Go to Profile</a>
 			</div>
 			<p>Need help or have feedback? Just reply to this email.</p>
 			<p>Happy cooking!</p>
