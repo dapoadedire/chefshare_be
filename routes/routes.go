@@ -67,6 +67,13 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 			auth.POST("/login", app.AuthHandler.LoginUser)
 			auth.POST("/token/refresh", app.AuthHandler.RefreshAccessToken)
 
+			// Email verification routes
+			verifyEmail := auth.Group("/verify-email")
+			{
+				verifyEmail.POST("/confirm", app.AuthHandler.VerifyEmail)
+				verifyEmail.POST("/resend", app.AuthHandler.ResendVerificationEmail)
+			}
+
 			// Password reset flow with rate limiting
 			password := auth.Group("/password/reset")
 			password.Use(middleware.PasswordResetRateLimitMiddleware())
@@ -83,6 +90,7 @@ func SetupRoutes(router *gin.Engine, app *app.Application) *gin.Engine {
 		{
 			authProtected.GET("/me", app.AuthHandler.GetAuthenticatedUser)
 			authProtected.POST("/logout", app.AuthHandler.LogoutUser)
+			authProtected.POST("/verify-email/request", app.AuthHandler.RequestVerificationEmail)
 		}
 
 		// Protected user profile routes
