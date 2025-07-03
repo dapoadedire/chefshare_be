@@ -1,5 +1,5 @@
 generate-swagger-docs:
-	$HOME/go/bin/swag init
+	$(HOME)/go/bin/swag init
 
 run:
 	@if [ -z "$$(docker ps -q -f name=chefshare_be)" ]; then \
@@ -7,9 +7,6 @@ run:
 	fi
 	@echo "Running the application..."
 	@go run main.go
-
-docs:
-	$(shell go env GOPATH)/bin/swag init -g main.go
 
 docker-down:
 	@echo "Stopping and removing Docker containers..."

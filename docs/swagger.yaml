@@ -61,6 +61,16 @@ definitions:
       email:
         type: string
     type: object
+  api.resendVerificationRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  api.verifyEmailRequest:
+    properties:
+      token:
+        type: string
+    type: object
   api.verifyOTPRequest:
     properties:
       email:
@@ -197,7 +207,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Verifies the OTP sent to user's email and resets the password
+      description: Verifies the OTP sent to user's email and resets the password (transaction-based)
       parameters:
       - description: OTP verification and new password
         in: body
@@ -222,6 +232,12 @@ paths:
             type: object
         "404":
           description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -263,6 +279,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "429":
+          description: Rate limit exceeded
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal server error
           schema:
@@ -295,6 +317,12 @@ paths:
             type: object
         "400":
           description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -353,7 +381,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Validates refresh token and issues a new access token
+      description: Validates refresh token and issues a new access token with token
+        rotation
       parameters:
       - description: Refresh token
         in: body
@@ -368,7 +397,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: New access token
+          description: New access and refresh tokens
           schema:
             additionalProperties: true
             type: object
@@ -387,6 +416,144 @@ paths:
       summary: Refresh JWT access token
       tags:
       - Authentication
+  /auth/verify-email/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Verifies a user's email address using the token sent in the verification
+        email
+      parameters:
+      - description: Verification token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.verifyEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Token not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "410":
+          description: Token expired
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify email address
+      tags:
+      - Email Verification
+  /auth/verify-email/request:
+    post:
+      description: Sends a new verification email to the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Email already verified
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Rate limit exceeded
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Request verification email (authenticated)
+      tags:
+      - Email Verification
+  /auth/verify-email/resend:
+    post:
+      consumes:
+      - application/json
+      description: Sends a new verification email to the user
+      parameters:
+      - description: Email address
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.resendVerificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Rate limit exceeded
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Resend verification email
+      tags:
+      - Email Verification
   /users/me:
     put:
       consumes:
