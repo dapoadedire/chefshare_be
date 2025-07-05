@@ -13,8 +13,6 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-var DB *sql.DB
-
 func Open() (*sql.DB, error) {
 	// Load .env file
 	err := godotenv.Load()
